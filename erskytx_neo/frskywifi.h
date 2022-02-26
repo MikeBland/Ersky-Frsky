@@ -1,0 +1,3 @@
+
+#define WIFI	1
+
