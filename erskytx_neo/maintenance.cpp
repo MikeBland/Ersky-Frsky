@@ -93,6 +93,7 @@ uint8_t SportState ;
 #define WIFI_RUNNING			2
 #define WIFI_STOPPING			3
 #define WIFI_CONNECTING		4
+#define WIFI_NEED_REBOOT	5
 #endif
 
 struct t_frskHeader
@@ -811,63 +812,63 @@ void menuFileDelete( uint8_t event )
 	}
 }
 
-lfs_file_t LfsHandle ;
-uint8_t LfsCopyBuffer[64] ;
+//lfs_file_t LfsHandle ;
+//uint8_t LfsCopyBuffer[64] ;
 
-void menuFileLfs( uint8_t event )
-{
-	uint32_t length ;
-	char *p ;
-	File dir ;
-	File entry ;
-	int32_t result ;
-	uint32_t amountRead ;
-  int32_t written ;
-	TITLE("Moving Files") ;
+//void menuFileLfs( uint8_t event )
+//{
+//	uint32_t length ;
+//	char *p ;
+//	File dir ;
+//	File entry ;
+//	int32_t result ;
+//	uint32_t amountRead ;
+//  int32_t written ;
+//	TITLE("Moving Files") ;
 
-	dir = SPIFFS.open("/") ;
-	do
-	{
-  	entry = dir.openNextFile() ;
- 		if (! entry)
-		{
- 			// no more files in the folder
-			popMenu( true ) ;
- 			return ;
- 		}
-		p = ( char *)cpystr( (uint8_t *)FileNames[0], (uint8_t *)entry.name() ) ;
-		p -= 3 ;
-		if ( *p == 'w' )
-		{
-			if ( *(p+1) == 'a' )
-			{
-				if ( *(p+2) == 'v' )
-				{
-  				lcd_puts_P( 0, 2*FH, "Moving:" ) ;
-					lcd_putsn_P( 0, 4*FH, (char *) FileNames[0], 21 ) ;
-					refreshDisplay() ;
-					UpdateFile = SPIFFS.open( (char *)FileNames[0], "r" ) ;
-					FirmwareSize = UpdateFile.size() ;
-					result = lfs_file_open( &Lfs, &LfsHandle, (char *)FileNames[0], LFS_O_RDWR | LFS_O_CREAT) ;
-					while ( FirmwareSize )
-					{
-						amountRead = UpdateFile.readBytes( (char *)LfsCopyBuffer, 64 ) ;
-						if ( amountRead == 0 )
-						{
-							break ;
-						}
-						written = lfs_file_write( &Lfs, &LfsHandle, (char *)LfsCopyBuffer, amountRead ) ;
-						FirmwareSize -= amountRead ;
-					}
-					UpdateFile.close() ;
-					lfs_file_close(&Lfs, &LfsHandle ) ;
-					SPIFFS.remove((char *)FileNames[0]) ;
-					break ;
-				}
-			}
-		}
-	} while (1) ;
-}
+//	dir = SPIFFS.open("/") ;
+//	do
+//	{
+//  	entry = dir.openNextFile() ;
+// 		if (! entry)
+//		{
+// 			// no more files in the folder
+//			popMenu( true ) ;
+// 			return ;
+// 		}
+//		p = ( char *)cpystr( (uint8_t *)FileNames[0], (uint8_t *)entry.name() ) ;
+//		p -= 3 ;
+//		if ( *p == 'w' )
+//		{
+//			if ( *(p+1) == 'a' )
+//			{
+//				if ( *(p+2) == 'v' )
+//				{
+//  				lcd_puts_P( 0, 2*FH, "Moving:" ) ;
+//					lcd_putsn_P( 0, 4*FH, (char *) FileNames[0], 21 ) ;
+//					refreshDisplay() ;
+//					UpdateFile = SPIFFS.open( (char *)FileNames[0], "r" ) ;
+//					FirmwareSize = UpdateFile.size() ;
+//					result = lfs_file_open( &Lfs, &LfsHandle, (char *)FileNames[0], LFS_O_RDWR | LFS_O_CREAT) ;
+//					while ( FirmwareSize )
+//					{
+//						amountRead = UpdateFile.readBytes( (char *)LfsCopyBuffer, 64 ) ;
+//						if ( amountRead == 0 )
+//						{
+//							break ;
+//						}
+//						written = lfs_file_write( &Lfs, &LfsHandle, (char *)LfsCopyBuffer, amountRead ) ;
+//						FirmwareSize -= amountRead ;
+//					}
+//					UpdateFile.close() ;
+//					lfs_file_close(&Lfs, &LfsHandle ) ;
+//					SPIFFS.remove((char *)FileNames[0]) ;
+//					break ;
+//				}
+//			}
+//		}
+//	} while (1) ;
+//}
 
 
 const char* ssid     = "Frsky Neo" ;
@@ -884,6 +885,11 @@ IPAddress IP ;
 uint32_t result ;
 uint8_t NetId[20] ;
 uint8_t NetPass[20] ;
+
+void requestRestart()
+{
+	WifiActive = WIFI_NEED_REBOOT	;
+}
 
 void runWifi()
 {
@@ -979,7 +985,15 @@ void menuWifi( uint8_t event )
 {
 	uint32_t i ;
 	TITLE("WIFI") ;
-	static MState2 mstate2;
+	static MState2 mstate2 ;
+	
+	if ( WifiActive == WIFI_NEED_REBOOT )
+	{
+  	lcd_puts_P( 0, 2*FH, "Update complete" ) ;
+  	lcd_puts_P( 0, 4*FH, "Power off and on" ) ;
+		return ;
+	}
+
 	mstate2.check_columns(event, 1-1) ;
 
 	if ( event == EVT_ENTRY )
@@ -1002,6 +1016,7 @@ void menuWifi( uint8_t event )
 	{
   	lcd_puts_P( 0, 3*FH, " Connecting" ) ;
 	}
+
 
 
 extern uint8_t FrskyWifiState ;
@@ -1052,7 +1067,7 @@ void menuUpdate( uint8_t event )
 	TITLE("Maintenance") ;
 	static MState2 mstate2 ;
 #ifdef WIFI
-	mstate2.check_columns(event, 7-1) ;
+	mstate2.check_columns(event, 6-1) ;
 #else
 	mstate2.check_columns(event, 2-1) ;
 #endif
@@ -1162,20 +1177,30 @@ void menuUpdate( uint8_t event )
 			pushMenu(menuFileDelete) ;
 		}
 	}
- 	y += FH ;
-	subN += 1 ;
-	lcd_puts_P( 0, y, "Set LFS from SPIFFS" ) ;
-	if ( event == EVT_KEY_BREAK(KEY_MENU) )
-	{
-		s_editMode = 0 ;
-	  if(sub==subN)
-		{
-			pushMenu(menuFileLfs) ;
-		}
-	}
+// 	y += FH ;
+//	subN += 1 ;
+//	lcd_puts_P( 0, y, "Update from SPIFFS" ) ;
+//	if ( event == EVT_KEY_BREAK(KEY_MENU) )
+//	{
+//void updateFromSpiffs() ;
+//		s_editMode = 0 ;
+//	  if(sub==subN)
+//		{
+//			updateFromSpiffs() ;
+//		}
+//	}
 
-
-
+// 	y += FH ;
+//	subN += 1 ;
+//	lcd_puts_P( 0, y, "Set LFS from SPIFFS" ) ;
+//	if ( event == EVT_KEY_BREAK(KEY_MENU) )
+//	{
+//		s_editMode = 0 ;
+//	  if(sub==subN)
+//		{
+//			pushMenu(menuFileLfs) ;
+//		}
+//	}
 
 	lcd_char_inverse( 0, (sub+1)*FH, 18*FW, 0 ) ;
 }
