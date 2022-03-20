@@ -18,7 +18,6 @@
 
 #define STR_DIAG           "DIAG"
 #define SWITCHES_STR			 "\003         SC\200SC-SC\201         L1 L2 L3 L4 L5 L6 L7 L8 L9 LA LB LC LD LE LF LG LH LI LJ LK LL LM LN LO onfSB\200SB-SB\201         SA\200SA-SA\201SD\200SD-SD\201"
-
 #define HW_SWITCHARROW_STR  "\200-\201"
 #define HW_SWITCHES_STR     "\002SASBSCSDL1L2L3L4L5L6L7L8L9LALBLCLDLELFLGLHLILJLKLLLMLNLO"
 
@@ -161,7 +160,7 @@
 
 #define STR_CUST_SWITCH    "LOGICAL SWITCHES"
 #define CSWITCH_STR        "\007----   v>val  v<val  |v|>val|v|<valAND    OR     XOR    ""v1==v2 ""v1!=v2 ""v1>v2  ""v1<v2  ""Latch  F-Flop TimeOffNtmeOff1-Shot 1-ShotRv\140=val v&val  v1\140=v2 v=val  Range  "
-#define STR_TELEM_ITEMS		 "\004----A1= A2= RSSITSSITim1Tim2Alt GaltGspdT1= T2= RPM FUELMah1Mah2CvltBattAmpsMah CtotFasVAccXAccYAccZVspdGvr1Gvr2Gvr3Gvr4Gvr5Gvr6Gvr7FwatRxV Hdg A3= A4= SC1 SC2 SC3 SC4 SC5 SC6 SC7 SC8 RTC TmOKAspdCel1Cel2Cel3Cel4Cel5Cel6RBv1RBa1RBv2RBa2RBm1RBm2RBSVRBSTCel7Cel8Cel9Cl10Cl11Cl12Cus1Cus2Cus3Cus4Cus5Cus6Fmd RunTModTCls1Cls2SbcVSbcAmVFR Cus7Cus8Cus9Cs10"
+#define STR_TELEM_ITEMS		 "\004----A1= A2= RSSITSSITim1Tim2Alt GaltGspdT1= T2= RPM FUELMah1Mah2CvltBattAmpsMah CtotFasVAccXAccYAccZVspdGvr1Gvr2Gvr3Gvr4Gvr5Gvr6Gvr7FwatRxV Hdg A3= A4= SC1 SC2 SC3 SC4 SC5 SC6 SC7 SC8 RTC TmOKAspdCel1Cel2Cel3Cel4Cel5Cel6RBv1RBa1RBv2RBa2RBm1RBm2RBSVRBSTCel7Cel8Cel9Cl10Cl11Cl12Cus1Cus2Cus3Cus4Cus5Cus6Fmd RunTModTCls1Cls2SbcVSbcAVFR Cus7Cus8Cus9Cs10"
 
 #define STR_MULTI_PROTO    "Protocol"
 #define STR_MULTI_TYPE	   "Type"
@@ -207,33 +206,8 @@
 #define STR_BATT_WARN      "Battery warning" 
 #define STR_INACT_ALARM    "Inactivity alarm\023m"
 
-
 #define STR_T_TRIM         "Thr-Trim"
 #define STR_T_EXPO         "T-Expo-Dr"
-
-#define STR_STICK_DEADBAND "Stick Deadband"
-#define STR_LV             "LV"
-#define STR_LH             "LH"
-#define STR_RV             "RV"
-#define STR_RH             "RH"
-
-#define STR_DUP_MODEL      "DUPLICATE MODEL"
-#define STR_DELETE_MODEL   "DELETE MODEL"
-#define STR_DUPLICATING    "Duplicating model"
-
-#define STR_BATTERY        "BATTERY"
-#define STR_Battery        "Battery"
-#define STR_STAT           "STAT"
-#define STR_STAT2          "STAT2"
-
-#define STR_MONTHS         "\003XxxJanFebMarAprMayJunJulAugSepOctNovDec"
-#define STR_DATE_TIME      "DATE-TIME"
-#define STR_SEC            "Sec."
-#define STR_MIN_SET        "Min.\015Set"
-#define STR_HOUR_MENU_LONG "Hour\012MENU LONG"
-#define STR_DATE           "Date"
-#define STR_MONTH          "Month"
-#define STR_YEAR           "Year"
 
 #define STR_Voice_Alarm		 "Voice Alert"
 #define STR_Voice_Alarms	 "Voice Alerts"
@@ -256,19 +230,70 @@
 #define SWASH_TYPE_STR     "\021" "\004" "\004----""120 ""120X""140 ""90  "
 
 #define STR_TELEMETRY      "TELEMETRY"
-#define STR_Version		     "Version" 
-
-#define STR_BOOT_REASON    "BOOT REASON"
 
 #define STR_WARNING			   "WARNING" 
 #define STR_THR_NOT_IDLE   "Throttle not idle"
 #define STR_RST_THROTTLE   "Reset throttle"
 #define STR_PRESS_KEY_SKIP "Press any key to skip"
+
+#define STR_THR_WARNING    "Throttle Warning"
+
+#define STR_E_LIMITS			 "E. Limits"
+
+#define STR_STICK_DEADBAND "Stick Deadband"
+#define STR_LV             "LV"
+#define STR_LH             "LH"
+#define STR_RV             "RV"
+#define STR_RH             "RH"
+
+#define STR_BATTERY        "BATTERY"
+#define STR_Battery        "Battery"
+#define STR_STAT           "STAT"
+#define STR_STAT2          "STAT2"
+
+#define STR_A_CHANNEL      "A  channel"
+
+#define STR_DUP_MODEL      "DUPLICATE MODEL"
+#define STR_DELETE_MODEL   "DELETE MODEL"
+#define STR_DUPLICATING    "Duplicating model"
+
+
+#define STR_MONTHS         "\003XxxJanFebMarAprMayJunJulAugSepOctNovDec"
+#define STR_DATE_TIME      "DATE-TIME"
+#define STR_SEC            "Sec."
+#define STR_MIN_SET        "Min.\015Set"
+#define STR_HOUR_MENU_LONG "Hour\012MENU LONG"
+#define STR_DATE           "Date"
+#define STR_MONTH          "Month"
+#define STR_YEAR           "Year"
+
+#define STR_Version		     "Version" 
+
+#define STR_BOOT_REASON    "BOOT REASON"
+
 #define STR_ALERT		      " ALERT"
 #define STR_CUSTOM_CHECK	 "Custom Check"
 #define STR_BEEPER         "Beeper"
 #define STR_BEEP_MODES     "\006Quiet ""NoKey ""xShort""Short ""Norm  ""Long  ""xLong "
 #define STR_SPEAKER_PITCH  "Speaker Pitch"
-#define STR_E_LIMITS			 "E. Limits"
 #define STR_BRIGHTNESS     "Brightness"
+
+#define STR_VARIO_SRC      "Vario: Source"
+#define STR_VSPD_A2        "\004----vspdA2  SC1 SC2 SC3 SC4 SC5 SC6 SC7 SC8 "
+#define STR_2SENSITIVITY   "\001Sensitivity"
+#define STR_SINK_TONES	   "Sink Tones"
+
+#define STR_TRIM_SWITCH    "Insta-Trim Sw"
+
+#define STR_DEFAULT_SW     "Default Sw"
+#define STR_SWITCH_WARN	   "Switch Warning"
+
+#define STR_RXEQ		       "Rx="
+
+#define STR_MENU_ONLY_EDIT "MENU only Edit"
+#define STR_CUSTOM_STK_NAMES		"CustomStkNames"
+#define STR_NUM_BLADES     "Num Blades"
+#define STR_AUTO_LIMITS    "Auto Limits"
+#define STR_MET_IMP        "\003MetImp"
+#define STR_GPS_ALTMAIN    "GpsAltMain"
 

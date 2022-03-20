@@ -45,6 +45,7 @@ uint8_t DisplayBuf[1024] ;
 #define DISPLAY_W 128
 
 uint8_t plotType = PLOT_XOR ;
+uint8_t BacklightPercent ;
 uint16_t Lcd_lastPos ;
 
 uint8_t plotStack[4] ;
@@ -924,12 +925,9 @@ void initBacklight()
 	GPIO.func_out_sel_cfg[19].val = 71 ; 
 }
 
-void setBacklightBrightness( uint32_t percent )
+
+void setBacklight( uint32_t percent )
 {
-	if ( percent > 100 )
-	{
-		percent = 100 ;		
-	}
 	percent *= 128 ;
 	percent /= 100 ;
   LEDC.channel_group[0].channel[0].duty.val = percent << 4 ;
@@ -937,6 +935,27 @@ void setBacklightBrightness( uint32_t percent )
 }
 
 
+
+
+void setBacklightBrightness( uint32_t percent )
+{
+	if ( percent > 100 )
+	{
+		percent = 100 ;		
+	}
+	BacklightPercent = percent ;
+	setBacklight( percent ) ;
+}
+
+void backlightOn()
+{
+	setBacklight( BacklightPercent ) ;
+}
+
+void backlightOff()
+{
+	setBacklight( 0 ) ;
+}
 
 
 

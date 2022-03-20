@@ -60,9 +60,13 @@ extern uint16_t UsbV ;
 extern uint8_t CurrentVolume ;
 
 extern const uint8_t GvaString[] ;
+extern uint8_t VoiceFileType ;
+extern char SelectedVoiceFileName[] ;
+extern uint8_t FileSelectResult ;
 
 void menuVersion(uint8_t event) ;
 void menuGlobalVoiceAlarm(uint8_t event) ;
+void menuSelectVoiceFile(uint8_t event) ;
 
 static void displayGPSformat( uint16_t x, uint16_t y, uint8_t attr )
 {
@@ -178,7 +182,7 @@ void menuAlarms( uint8_t event )
 {
 	TITLE( STR_Alarms ) ;
 	static MState2 mstate2;
-	event = mstate2.check_columns(event, 3-1) ;
+	event = mstate2.check_columns(event, 4-1) ;
 
 	uint32_t sub = mstate2.m_posVert ;
 	uint32_t y = FH ;
@@ -220,10 +224,10 @@ void menuAlarms( uint8_t event )
 	y += FH ;
 	subN += 1 ;
 	
-//  uint8_t b = g_eeGeneral.disableThrottleWarning;
-//  g_eeGeneral.disableThrottleWarning = offonMenuItem( b, y, PSTR(STR_THR_WARNING), sub == subN ) ;
-// 	y += FH ;
-//	subN += 1 ;
+  uint8_t b = g_eeGeneral.disableThrottleWarning;
+  g_eeGeneral.disableThrottleWarning = offonMenuItem( b, y, PSTR(STR_THR_WARNING), sub == subN ) ;
+ 	y += FH ;
+	subN += 1 ;
 
 //  b = g_eeGeneral.disableAlarmWarning;
 //  g_eeGeneral.disableAlarmWarning = offonMenuItem( b, y, PSTR(STR_ALARM_WARN), sub == subN ) ;
@@ -244,7 +248,7 @@ void menuGeneral( uint8_t event )
 	TITLE( STR_General ) ;
 	
 	static MState2 mstate2;
-	mstate2.check_columns(event, 5-1) ;
+	mstate2.check_columns(event, 6-1) ;
 
 //	uint16_t attr ;
 	uint8_t subN = 0 ;
@@ -285,6 +289,11 @@ void menuGeneral( uint8_t event )
 		CHECK_INCDEC_H_GENVAR_0(g_eeGeneral.gpsFormat, 1 ) ;
 	}
  	y += FH ;
+	subN += 1 ;
+      
+	b = g_eeGeneral.forceMenuEdit ;
+	g_eeGeneral.forceMenuEdit = onoffMenuItem( b, y, PSTR(STR_MENU_ONLY_EDIT), sub == subN ) ;
+	y += FH ;
 	subN += 1 ;
 
   g_eeGeneral.altMixMenu = onoffMenuItem( g_eeGeneral.altMixMenu, y, XPSTR("Mix Menu Details"), sub == subN ) ;
@@ -360,69 +369,139 @@ void menuAudio( uint8_t event )
 //	TITLE( "Display" ) ;
 	lcd_putsAtt(0,0,"Audio Haptic",INVERS) ;
 	
-	static MState2 mstate2;
-	mstate2.check_columns(event, 5-1) ;
+	static MState2 mstate2 ;
+	uint32_t rows = g_eeGeneral.welcomeType == 2 ? 9 : 8 ;
+	mstate2.check_columns(event, rows-1) ;
 
 	uint16_t attr ;
 	uint8_t subN = 0 ;
   int8_t sub = mstate2.m_posVert ;
 	uint16_t y = FH ;
 	uint8_t blink = InverseBlink ;
+  uint8_t t_pgOfs ;
 
-	lcd_puts_Pleft( y, PSTR(STR_VOLUME));
-	CurrentVolume = g_eeGeneral.volume ;
-	lcd_outdezAtt( PARAM_OFS+2*FW, y, CurrentVolume, (sub==subN) ? blink : 0 ) ;
-  if(sub==subN)
+	t_pgOfs = evalOffset( sub ) ;
+
+	if(t_pgOfs<=subN)
 	{
-    CurrentVolume = checkIncDec16( CurrentVolume, 0, NUM_VOL_LEVELS-1, EE_GENERAL) ;
-		if ( CurrentVolume != g_eeGeneral.volume )
+		lcd_puts_Pleft( y, PSTR(STR_VOLUME));
+		CurrentVolume = g_eeGeneral.volume ;
+		lcd_outdezAtt( PARAM_OFS+2*FW, y, CurrentVolume, (sub==subN) ? blink : 0 ) ;
+  	if(sub==subN)
 		{
-			setVolume( g_eeGeneral.volume = CurrentVolume ) ;
+  	  CurrentVolume = checkIncDec16( CurrentVolume, 0, NUM_VOL_LEVELS-1, EE_GENERAL) ;
+			if ( CurrentVolume != g_eeGeneral.volume )
+			{
+				setVolume( g_eeGeneral.volume = CurrentVolume ) ;
+			}
 		}
+		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
 	}
-  y += FH ;
 	subN += 1 ;
 
-	uint8_t b ;
-  b = g_eeGeneral.beeperVal ;
-  lcd_puts_Pleft( y,PSTR(STR_BEEPER));
-  lcd_putsAttIdx(PARAM_OFS - FW - 4, y, PSTR(STR_BEEP_MODES),b,(sub==subN ? blink:0)) ;
-	if(sub==subN)
+	if(t_pgOfs<=subN)
 	{
-		CHECK_INCDEC_H_GENVAR_0( b, 6 ) ;
-		g_eeGeneral.beeperVal = b ;
+		uint8_t b ;
+  	b = g_eeGeneral.beeperVal ;
+  	lcd_puts_Pleft( y,PSTR(STR_BEEPER));
+  	lcd_putsAttIdx(PARAM_OFS - FW - 4, y, PSTR(STR_BEEP_MODES),b,(sub==subN ? blink:0)) ;
+		if(sub==subN)
+		{
+			CHECK_INCDEC_H_GENVAR_0( b, 6 ) ;
+			g_eeGeneral.beeperVal = b ;
+		}
+		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
 	}
-  y += FH ;
 	subN += 1 ;
 	
-  lcd_puts_P( 0, y, PSTR(STR_SPEAKER_PITCH) ) ;
-  lcd_outdezAtt( PARAM_OFS+2*FW, y, g_eeGeneral.speakerPitch, (sub==subN ? blink : 0) ) ;
-  if(sub==subN)
+	if(t_pgOfs<=subN)
 	{
-		g_eeGeneral.speakerPitch = checkIncDec16( g_eeGeneral.speakerPitch, 0, 20, EE_GENERAL ) ;
+  	lcd_puts_P( 0, y, PSTR(STR_SPEAKER_PITCH) ) ;
+  	lcd_outdezAtt( PARAM_OFS+2*FW, y, g_eeGeneral.speakerPitch, (sub==subN ? blink : 0) ) ;
+  	if(sub==subN)
+		{
+			g_eeGeneral.speakerPitch = checkIncDec16( g_eeGeneral.speakerPitch, 0, 20, EE_GENERAL ) ;
+		}
+		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
 	}
-  y += FH ;
 	subN += 1 ;
 
-  lcd_puts_P( 0, y, XPSTR("Haptic Min Run")) ;
-  lcd_outdezAtt(PARAM_OFS+2*FW, y, g_eeGeneral.hapticMinRun+20, (sub==subN ? blink : 0) ) ;
-  if(sub==subN) CHECK_INCDEC_H_GENVAR_0( g_eeGeneral.hapticMinRun, 20 ) ;
-  y += FH ;
+	if(t_pgOfs<=subN)
+	{
+  	lcd_puts_P( 0, y, XPSTR("Haptic Min Run")) ;
+  	lcd_outdezAtt(PARAM_OFS+2*FW, y, g_eeGeneral.hapticMinRun+20, (sub==subN ? blink : 0) ) ;
+  	if(sub==subN) CHECK_INCDEC_H_GENVAR_0( g_eeGeneral.hapticMinRun, 20 ) ;
+		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
+	}
 	subN += 1 ;
 	 
-	lcd_putsAtt( 0, y, (char *)XPSTR(GvaString), sub==subN ? INVERS : 0 ) ;
-  if( sub==subN )
+	if(t_pgOfs<=subN)
 	{
-		if ( checkForMenuEncoderBreak( Tevent ) )
+		lcd_putsAtt( 0, y, (char *)XPSTR(GvaString), sub==subN ? INVERS : 0 ) ;
+  	if( sub==subN )
 		{
-			pushMenu(menuGlobalVoiceAlarm) ;
+			if ( checkForMenuEncoderBreak( Tevent ) )
+			{
+				pushMenu(menuGlobalVoiceAlarm) ;
+			}
 		}
+		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
 	}
-  y += FH ;
 	subN += 1 ;
 
+	if(t_pgOfs<=subN)
+	{
+		g_eeGeneral.preBeep = onoffMenuItem( g_eeGeneral.preBeep, y, PSTR(STR_BEEP_COUNTDOWN), sub == subN ) ;
+		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
+	}
+	subN += 1 ;
 
+	if(t_pgOfs<=subN)
+	{
+		g_eeGeneral.minuteBeep = onoffMenuItem( g_eeGeneral.minuteBeep, y, PSTR(STR_MINUTE_BEEP), sub == subN ) ;
+		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
+	}
+	subN += 1 ;
 
+	if(t_pgOfs<=subN)
+	{
+		lcd_puts_Pleft( y, XPSTR( "Welcome Type") ) ;
+		g_eeGeneral.welcomeType = checkIndexed( y, XPSTR("132\002""\006System  NoneCustom"), g_eeGeneral.welcomeType, sub==subN ) ;
+		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
+	}
+	subN += 1 ;
+
+	if(t_pgOfs<=subN)
+	{
+		if ( g_eeGeneral.welcomeType == 2 )
+		{
+			// FileName
+	 		lcd_puts_Pleft( y, XPSTR( "FileName") ) ;
+ 			uint8_t attr = sub == subN ? InverseBlink : 0 ;
+			alphaEditName( 10*FW-2, y, (uint8_t *)g_eeGeneral.welcomeFileName, sizeof(g_eeGeneral.welcomeFileName), (sub==subN) | ALPHA_NO_NAME, (uint8_t *)XPSTR( "FileName") ) ;
+			validateName( g_eeGeneral.welcomeFileName, sizeof(g_eeGeneral.welcomeFileName) ) ;
+			if( attr )
+			{
+				if ( event == EVT_KEY_LONG(KEY_MENU) )
+				{
+					VoiceFileType = VOICE_FILE_TYPE_USER ;
+ 				 	pushMenu( menuSelectVoiceFile ) ;
+				}
+				if ( event == EVT_ENTRY_UP )
+				{
+					if ( FileSelectResult == 1 )
+					{
+		 				copyFileName( (char *)g_eeGeneral.welcomeFileName, SelectedVoiceFileName, 8 ) ;
+	   				eeDirty(EE_GENERAL) ;		// Save it
+					}
+				}
+			} 
+		}
+
+		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
+	}
+	subN += 1 ;
+		
 }
 
 void menuDiagAna( uint8_t event )
@@ -493,63 +572,83 @@ void menuControls( uint8_t event )
 	TITLE( STR_Controls ) ;
 	
 	static MState2 mstate2;
-	mstate2.check_columns(event, 8-1) ;
+	mstate2.check_columns(event, 7-1) ;
 
 	uint8_t subN = 0 ;
   int8_t sub = mstate2.m_posVert ;
 	uint8_t y = FH ;
 	uint8_t blink = InverseBlink ;
 
-	uint8_t attr = sub==subN ? blink : 0 ;
-	lcd_puts_Pleft( y, PSTR(STR_CHAN_ORDER) ) ;//   RAET->AETR
-	uint8_t bch = bchout_ar[g_eeGeneral.templateSetup] ;
-	for ( uint8_t i = 4 ; i > 0 ; i -= 1 )
+	if ( sub < 4 )
 	{
-		uint8_t letter ;
-		letter = *(PSTR(STR_SP_RETA) +(bch & 3) + 1 ) ;
-	  lcd_putcAtt( 16*FW+RCON_OFF_0+i*FW, y, letter, attr ) ;
-		bch >>= 2 ;
-	}
-	if(attr) CHECK_INCDEC_H_GENVAR_0( g_eeGeneral.templateSetup, 23 ) ;
- 	y += FH ;
-	subN += 1 ;
-
-	uint8_t ct = g_eeGeneral.crosstrim + ( g_eeGeneral.xcrosstrim << 1 ) ;
-  lcd_puts_Pleft(y, PSTR(STR_CROSSTRIM));
-	ct = checkIndexed( y, XPSTR("\146\002\003OFFON Vtg"), ct, (sub==subN) ) ;
-	g_eeGeneral.crosstrim = ct ;
-	g_eeGeneral.xcrosstrim = ct >> 1 ;
- 	y += FH ;
-	subN += 1 ;
-
-	lcd_puts_Pleft( y, PSTR(STR_MODE) );
-	for ( uint32_t i = 0 ; i < 4 ; i += 1 )
-	{
-		lcd_img((6+4*i)*FW, y, (uint8_t *)sticks, i, 0 ) ;
-	}
-	y += FH ;
-    
-	attr = 0 ;
-	uint8_t mode = g_eeGeneral.stickMode ;
- 	if(sub==subN)
-	{
-		attr = INVERS ;
-		if ( s_editMode )
+		displayNext() ;
+		uint8_t attr = sub==subN ? blink : 0 ;
+		lcd_puts_Pleft( y, PSTR(STR_CHAN_ORDER) ) ;//   RAET->AETR
+		uint8_t bch = bchout_ar[g_eeGeneral.templateSetup] ;
+		for ( uint8_t i = 4 ; i > 0 ; i -= 1 )
 		{
-			attr = BLINK ;
-					
-			CHECK_INCDEC_H_GENVAR_0( mode,3);
-			if ( mode != g_eeGeneral.stickMode )
+			uint8_t letter ;
+			letter = *(PSTR(STR_SP_RETA) +(bch & 3) + 1 ) ;
+		  lcd_putcAtt( 16*FW+RCON_OFF_0+i*FW, y, letter, attr ) ;
+			bch >>= 2 ;
+		}
+		if(attr) CHECK_INCDEC_H_GENVAR_0( g_eeGeneral.templateSetup, 23 ) ;
+ 		y += FH ;
+		subN += 1 ;
+
+		uint8_t ct = g_eeGeneral.crosstrim + ( g_eeGeneral.xcrosstrim << 1 ) ;
+  	lcd_puts_Pleft(y, PSTR(STR_CROSSTRIM));
+		ct = checkIndexed( y, XPSTR("\146\002\003OFFON Vtg"), ct, (sub==subN) ) ;
+		g_eeGeneral.crosstrim = ct ;
+		g_eeGeneral.xcrosstrim = ct >> 1 ;
+ 		y += FH ;
+		subN += 1 ;
+
+		lcd_puts_Pleft( y, PSTR(STR_MODE) );
+		for ( uint32_t i = 0 ; i < 4 ; i += 1 )
+		{
+			lcd_img((6+4*i)*FW, y, (uint8_t *)sticks, i, 0 ) ;
+		}
+		y += FH ;
+    
+		attr = 0 ;
+		uint8_t mode = g_eeGeneral.stickMode ;
+ 		if(sub==subN)
+		{
+			attr = INVERS ;
+			if ( s_editMode )
 			{
-//				g_eeGeneral.stickScroll = 0 ;
-				g_eeGeneral.stickMode = mode ;							
+				attr = BLINK ;
+					
+				CHECK_INCDEC_H_GENVAR_0( mode,3);
+				if ( mode != g_eeGeneral.stickMode )
+				{
+	//				g_eeGeneral.stickScroll = 0 ;
+					g_eeGeneral.stickMode = mode ;							
+				}
 			}
 		}
+  	lcd_putcAtt( 3*FW+RCON_OFF_0, y, '1'+g_eeGeneral.stickMode,attr);
+  	for(uint8_t i=0; i<4; i++) putsChnRaw( (6+4*i)*FW+RCON_OFF_0, y, modeFixValue( i ), 0 ) ;//sub==3?INVERS:0);
+ 		y += FH ;
+		subN += 1 ;
 	}
-  lcd_putcAtt( 3*FW+RCON_OFF_0, y, '1'+g_eeGeneral.stickMode,attr);
-  for(uint8_t i=0; i<4; i++) putsChnRaw( (6+4*i)*FW+RCON_OFF_0, y, modeFixValue( i ), 0 ) ;//sub==3?INVERS:0);
- 	y += FH ;
-	subN += 1 ;
+	else
+	{
+		subN = 4 ;
+			
+    for ( uint32_t i = 0 ; i < 4 ; i += 1 )
+		{
+      lcd_putsAttIdx( 5*FW, y, PSTR(STR_STICK_NAMES), i, 0 ) ;
+//			if ( sub == subN )
+//			{
+//				SubMenuCall = 0x80 + i + 5 ;
+//			}
+			alphaEditName( 11*FW, y, &g_eeGeneral.customStickNames[i*4], 4, sub==subN, (uint8_t *)&PSTR(STR_STICK_NAMES)[i*5+1] ) ;
+	 		y += FH ;
+			subN += 1 ;
+		}
+	}
 }
 
 void edit_stick_deadband(uint8_t x, uint8_t y, const char *s, uint8_t ch, uint8_t edit)

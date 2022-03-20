@@ -41,6 +41,7 @@
 #include "file.h"
 #include "en.h"
 #include "telemetry.h"
+#include "audio.h"
 
 #include "lfs.h"
 #include "freertos/semphr.h"
@@ -57,6 +58,7 @@ extern struct fileControl FileControl ;
 void setupFileNames( char *dir, struct fileControl *fc, char *ext ) ;
 uint32_t fileList(uint8_t event, struct fileControl *fc ) ;
 extern struct t_filelist FileList ;
+extern uint8_t	CurrentPhase ;
 
 void menuAlpha(uint8_t event) ;
 
@@ -97,6 +99,8 @@ uint8_t DupIfNonzero = 0 ;
 int8_t DupSub ;
 
 extern uint8_t VoiceCheckFlag100mS ;
+
+void perOut(int16_t *chanOut, uint8_t att ) ;
 
 void doMainScreenGraphics() ;
 void menuCalib(uint8_t event) ;
@@ -463,6 +467,67 @@ void menuText(uint8_t event)
 //		lcd_putsnAtt( 0, y, (const char *)&SharedMemory.TextControl.TextMenuBuffer[j], 21, 0 ) ;
 //	}
 }
+
+extern int16_t RawSticks[] ;
+
+void setStickCenter(uint32_t toSubTrims ) // copy state of 3 primary to subtrim
+{
+	uint8_t thisPhase ;
+  int16_t zero_chans512_before[NUM_SKYCHNOUT];
+  int16_t zero_chans512_after[NUM_SKYCHNOUT];
+
+	thisPhase = getFlightPhase() ;
+	CurrentPhase = thisPhase ;
+
+	if ( ( !g_model.instaTrimToTrims) || toSubTrims )
+	{
+  	perOut(zero_chans512_before,NO_TRAINER | NO_INPUT | FADE_FIRST | FADE_LAST); // do output loop - zero input channels
+  	perOut(zero_chans512_after,NO_TRAINER | FADE_FIRST | FADE_LAST); // do output loop - zero input channels
+
+  	for(uint8_t i=0; i<NUM_SKYCHNOUT ; i++)
+  	{
+			LimitData *pld = &g_model.limitData[i] ;
+  	  int16_t v = pld->offset;
+  	  v += pld->revert ?
+  	                (zero_chans512_before[i] - zero_chans512_after[i]) :
+  	                (zero_chans512_after[i] - zero_chans512_before[i]);
+  	  pld->offset = max(min(v,(int16_t)1000),(int16_t)-1000); // make sure the offset doesn't go haywire
+  	}
+	}
+
+  for(uint8_t i=0; i<4; i++)
+	{
+		if(!IS_THROTTLE(i))
+		{
+			
+			if ( ( g_model.instaTrimToTrims) && !toSubTrims )
+			{
+				int16_t v = RawSticks[i] / 2 ;
+				int16_t original_trim = getTrimValue(thisPhase, i);
+				if ( ( v > 10 ) || ( v < -10 ) )
+				{
+					v = max(min( original_trim + v,125),-125) ;
+					setTrimValue(thisPhase, i, v ) ;
+				}
+			}
+			else
+			{
+				int16_t original_trim = getTrimValue(thisPhase, i);
+      	for (uint8_t phase=0; phase<MAX_MODES; phase +=  1)
+				{
+      	  int16_t trim = getRawTrimValue(phase, i);
+      	  if (trim <= TRIM_EXTENDED_MAX)
+					{
+      	    setTrimValue(phase, i, trim - original_trim);
+					}
+				}
+			}
+		}
+	}
+//  STORE_MODELVARS_TRIM;
+  audioDefevent(AU_WARNING2);
+}
+
 
 
 void menuStatistic(uint8_t event)
@@ -1036,10 +1101,10 @@ void actionMainPopup( uint8_t event )
 //		{
 ////      resetTelemetry( TEL_ITEM_RESET_ALL ) ;
 //		}
-//		else if( ( popidx == 14 )	|| ( popidx == 15 ) )// Reset Telemetry
-//		{
-////      resetTimern( popidx - 14 ) ;
-//		}
+		else if( ( popidx == 14 )	|| ( popidx == 15 ) )// Reset Telemetry
+		{
+      resetTimern( popidx - 14 ) ;
+		}
 	}
 }
 
@@ -1086,6 +1151,11 @@ void menuDeleteDupModel(uint8_t event)
 
 void displayCustomPage( uint32_t page )
 {
+	lcd_putsnAtt(0, 0, g_model.name, sizeof(g_model.name), INVERS) ;
+extern uint16_t g_vbat10mV ;
+  uint8_t att = g_vbat10mV < g_eeGeneral.vBatWarn ? BLINK : 0;
+	putsVolts( 14*FW, 0, g_vbat10mV, att) ;
+	displayTimer( 18*FW+5, 0, 0, 0 ) ;
 	
   for (uint32_t i = 0 ; i < 6 ; i += 1 )
 	{
@@ -1108,15 +1178,17 @@ void displayCustomPage( uint32_t page )
 									 DBLSIZE|CONDENSED, style ) ;
 		}
 	}
+
+	lcd_puts_Pleft( 7*FH, "RSSI" ) ;
+	lcd_hbar( 30, 57, 43, 6, TelemetryData[FR_RXRSI_COPY] ) ;
+	lcd_vline( 63, 8, 48 ) ;
 }
-
-
-
-
 
 
 void menuProc0(uint8_t event)
 {
+  static uint8_t trimSwLock ;
+	uint32_t i ;
 	switch(event)
 	{
 	  case EVT_KEY_LONG(KEY_MENU) :		// Nav Popup
@@ -1135,10 +1207,28 @@ void menuProc0(uint8_t event)
 				}
 			}
     break ;
+	  
+		case EVT_KEY_BREAK(KEY_EXIT) :
+			if ( PopupData.PopupActive == 0 )
+			{
+				PopupData.PopupActive = 1 ;
+				PopupData.PopupIdx = 0 ;
+     		killEvents(event) ;
+				event = 0 ;
+			}
+    break ;
 	}
 
-//	lcd_putsAtt( (128-56)/2, 0, "ErskyTx", DBLSIZE|CONDENSED ) ;
-	
+	{
+		uint8_t tsw ;
+		tsw = getSwitch00(g_model.trimSw) ;
+		if( tsw && !trimSwLock)
+		{
+			setStickCenter(0) ;
+		}
+		trimSwLock = tsw ;
+	}
+
 	switch ( MainDisplayIndex )
 	{
 		case 0 :
@@ -1156,18 +1246,57 @@ void menuProc0(uint8_t event)
 			doMainScreenGraphics() ;
 		extern void displayTrims() ;
 			displayTrims() ;
+
+			i = getFlightPhase() ;
+
+			if ( i )
+			{
+				if (g_model.phaseData[i-1].name[0] != ' ' )
+				{
+					lcd_putsnAtt( 64-3*FW, 4*FH, g_model.phaseData[i-1].name, 6, /*BSS*/ 0 ) ;
+				}
+				else
+				{
+  				lcd_putc( 64-3*FW, 4*FH, 'F' ) ;
+  				lcd_putc( 64-2*FW, 4*FH, '0'+ i ) ;
+				}
+			}
+			else
+			{
+				lcd_putc( 64-3*FW, 4*FH, 'F' ) ;
+				lcd_putc( 64-2*FW, 4*FH, '0' ) ;
+			}
+			lcd_rect( 64-3*FW-1, 4*FH-1, 6*FW+2, 9 ) ;   // put a bounding box
 		}
 		break ;
 		case 1 :
+		{	
 			lcd_img( 33, 0, (uint8_t *)HeadingImg, 0, 0 ) ;
-			lcd_puts_P( 2*FW, 7*FH, "P1" ) ;
+			lcd_putsnAtt( 3*FW, 2*FH+2, g_model.name, MODEL_NAME_LEN, BOLD ) ; //DBLSIZE ) ;
 
-			lcd_puts_P( 0, 2*FH, "RSSI" ) ;
-			lcd_outdezAtt( 9*FW, 2*FH, TelemetryData[FR_RXRSI_COPY], DBLSIZE ) ;
-	
+			uint8_t x = FW*2 ;
+			displayTimer( x+14*FW-1, FH*2, 0, DBLSIZE|CONDENSED ) ;
 
+		extern uint16_t g_vbat10mV ;
+			lcd_outdezAtt( 113, 0*FH, g_vbat10mV, PREC2 ) ;
+			lcd_putc( 114, 0*FH, 'v' ) ;
 
-
+//			lcd_puts_P( 0, 2*FH, "RSSI" ) ;
+//			lcd_outdezAtt( 9*FW, 2*FH, TelemetryData[FR_RXRSI_COPY], DBLSIZE ) ;
+	    
+			for( i = 0 ; i < 8 ; i += 1 )
+	    {
+      	uint32_t x0, y0 ;
+				uint32_t chan = i ; // 8 * io_subview + i ;
+	      int16_t val = g_chans512[chan] ;
+				x0 = i<4 ? 128/4+2 : 128*3/4-2 ;
+				y0 = 38+(i%4)*5 ;
+extern void singleBar( uint8_t x0, uint8_t y0, int16_t val ) ;
+				singleBar( x0, y0, val ) ;
+			}
+extern void displayTrims() ;
+			displayTrims() ;
+		}
 		break ;
 		case 2 :
 			displayCustomPage( 0 ) ;
@@ -1413,6 +1542,7 @@ void menuModelSelect(uint8_t event)
 //				break ;
 //			}		
 			case  EVT_KEY_LONG(KEY_EXIT):  // make sure exit long exits to main
+  	  	killEvents(event);
   	    popMenu(true);
       break;
 

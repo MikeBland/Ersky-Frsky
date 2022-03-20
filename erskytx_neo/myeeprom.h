@@ -203,7 +203,9 @@ typedef struct t_EEGeneral
 	int16_t rtcCal ;		// Unused
 	
 	uint8_t radioRegistrationID[8] ;
-//	uint8_t rfCountry ;
+  int8_t  screenShotSw ;	// Unused
+	uint8_t welcomeType ;
+	uint8_t welcomeFileName[8] ;
 
 	uint8_t	forExpansion[20] ;	// Allows for extra items not yet handled
 	 
@@ -435,6 +437,15 @@ typedef struct t_customCheck
 	int8_t  max ;
 } CustomCheckData ;
 
+typedef struct t_music
+{
+	int8_t musicStartSwitch ;
+	int8_t musicPauseSwitch ;
+	int8_t musicPrevSwitch ;
+	int8_t musicNextSwitch ;
+} MusicData ;
+
+
 typedef struct t_X20_ModelDataV4
 {
   char      name[MODEL_NAME_LEN];             // 10 must be first for eeLoadModelName
@@ -535,6 +546,17 @@ typedef struct t_X20_ModelDataV4
 	struct t_hiResDisplay hiresDisplay[2] ;		// Unused
 	struct t_hiResDisplay xhiresDisplay[4] ;	// Unused
 	int8_t cellScalers[12] ;
+	uint8_t   numBlades ;					// RPM scaling
+  int8_t    dsmMode ;
+	uint8_t		dsmAasRssi:1 ;
+  uint8_t   dsmVario:3 ;
+	MusicData musicData ;                  		// Unused
+	uint8_t trainerStartChannel ;          		// Unused
+	uint16_t modelswitchWarningDisables ;
+  uint16_t  modelswitchWarningStates ;
+  uint16_t xmodelswitchWarningStates ;	// Enough bits for Taranis X9E
+	uint8_t currentSource ;
+	uint8_t 	FASoffset ;			// 0.0 to 1.5
 
 } X20ModelData ;
 

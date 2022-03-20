@@ -253,6 +253,7 @@ extern int16_t CalibratedStick[] ;
 
 extern void doMainScreenGraphics( void ) ;
 extern void menuProc0(uint8_t event) ;
+extern void displayNext( void ) ;
 
 extern void actionMainPopup( uint8_t event ) ;
 
@@ -281,6 +282,9 @@ void putsChn( uint16_t x, uint16_t y, uint8_t idx1, uint8_t att) ;
 void dispGvar( uint8_t x, uint8_t y, uint8_t gvar, uint8_t attr ) ;
 void putsChnOpRaw( uint16_t x, uint16_t y, uint8_t source, uint8_t switchSource, uint8_t output, uint8_t attr ) ;
 void putsChnRaw(uint8_t x,uint8_t y,uint8_t idx,uint8_t att) ;
+
+uint8_t putsTelemValue(uint16_t x, uint16_t y, int16_t val, uint8_t channel, uint8_t att ) ;
+void lcd_xlabel_decimal( uint8_t x, uint8_t y, uint16_t value, uint8_t attr, const char *s ) ;
 
 uint8_t locateMappedItem( uint8_t value, uint8_t *options, uint32_t count ) ;
 uint8_t checkOutOfOrder( uint8_t value, uint8_t *options, uint32_t count ) ;

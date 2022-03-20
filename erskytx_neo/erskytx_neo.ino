@@ -85,6 +85,8 @@ void runWifi() ;
 void setupPulses(uint32_t module) ;
 int32_t pollSportFifo() ;
 void telemetryRecieveByte( uint8_t byte, uint32_t module ) ;
+uint8_t menuPressed() ;
+extern uint8_t LongMenuTimer ;
 
 // Temporary -> mixer
 extern uint8_t	CurrentPhase ;
@@ -228,6 +230,7 @@ uint32_t ResetReason ;
 MenuFuncP g_menuStack[10];
 uint8_t  g_menuStackPtr = 0;
 uint8_t  EnterMenu = 0 ;
+uint32_t SwitchesStates = 0 ;
 
 uint8_t SystemOptions ;
 
@@ -245,6 +248,7 @@ const char stickScramble[] =
 
 extern void menuUpdate( uint8_t event ) ;
 extern void pollMrx() ;
+int16_t m_to_ft( int16_t metres ) ;
 
 
 hw_timer_t *PTg0T0 ;
@@ -517,8 +521,10 @@ void DO_CROSS( uint16_t xx, uint16_t yy, uint16_t ww )
 #define SCREEN_WIDTH  128
 #define SCREEN_HEIGHT 64
 #define BOX_LIMIT     (BOX_WIDTH-MARKER_WIDTH)
-#define LBOX_CENTERX  (  SCREEN_WIDTH/4 + 10-1)
-#define RBOX_CENTERX  (3*SCREEN_WIDTH/4 - 10)
+//#define LBOX_CENTERX  (  SCREEN_WIDTH/4 + 10-1)
+//#define RBOX_CENTERX  (3*SCREEN_WIDTH/4 - 10)
+#define LBOX_CENTERX  (  SCREEN_WIDTH/4 )
+#define RBOX_CENTERX  (3*SCREEN_WIDTH/4 )
 #define BOX_CENTERY  (SCREEN_HEIGHT-9-BOX_WIDTH/2-1)
 
 void telltale( uint16_t centrex, int8_t xval, int8_t yval )
@@ -744,7 +750,10 @@ void IRAM_ATTR pulsesTask(void * parameter)
 			}
 			else if ( g_model.Module[1].protocol == PROTO_XFIRE )
 			{
-				setupPulses( 1 ) ;
+				if ( JustLoadedModel == 0 )
+				{
+					setupPulses( 1 ) ;
+				}
 			}
 		}
 	}
@@ -1528,6 +1537,134 @@ static void processVoiceAlarms()
 //	}
 }
 
+void processVarioTones()
+// Vario
+{
+
+	static uint8_t varioRepeatRate = 0 ;
+	static uint8_t sounded = 0 ;
+
+	if ( g_model.varioData.varioSource ) // Vario enabled
+	{
+		if ( getSwitch00( g_model.varioData.swtch ) )
+		{
+			uint8_t new_rate = 0 ;
+			if ( varioRepeatRate )
+			{
+				varioRepeatRate -= 1 ;
+			}
+			if ( varioRepeatRate == 0 )
+			{
+				sounded = 0 ;
+			}
+			int16_t vspd ;
+			if ( g_model.varioData.varioSource == 1 )
+			{
+				vspd = TelemetryData[FR_VSPD] ;
+
+				if ( g_model.varioData.param > 1 )
+				{
+					vspd /= g_model.varioData.param ;
+				}
+			}
+			else if ( g_model.varioData.varioSource == 2 )
+			{
+				vspd = TelemetryData[FR_A2_COPY] - 128 ;
+				if ( ( vspd < 3 ) && ( vspd > -3 ) )
+				{
+					vspd = 0 ;							
+				}
+				vspd *= g_model.varioData.param ;
+			}
+			else
+			{
+				// A Scaler
+				vspd = calc_scaler( g_model.varioData.varioSource-3, 0, 0 ) ;
+				if ( g_model.varioData.param > 1 )
+				{
+					vspd /= g_model.varioData.param ;
+				}
+			}
+			if ( vspd )
+			{
+				if ( vspd < 0 )
+				{
+					vspd = -vspd ;
+					if (!g_model.varioData.sinkTones )
+					{
+						if ( vspd > 25 )		// OpenXsensor
+						{
+							if ( sounded != 2 )
+							{
+								sounded = 2 ;
+								varioRepeatRate = 0 ;
+  	  	     		audio.event( AU_VARIO_DOWN, vspd/25 ) ;
+							}
+						}
+					}
+				}
+				else
+				{
+					if ( vspd > 25 )			// OpenXsensor
+					{
+						if ( sounded != 1 )
+						{
+							sounded = 1 ;
+							varioRepeatRate = 0 ;
+		  	      audio.event( AU_VARIO_UP, vspd/25 ) ;
+						}
+					}
+				}
+				if ( vspd < 75 )
+				{
+					new_rate = 8 ;
+				}
+				else if ( vspd < 100 )
+				{
+					new_rate = 7 ;
+				}
+				else if ( vspd < 125 )
+				{
+					new_rate = 6 ;
+				}
+				else if ( vspd < 150 )
+				{
+					new_rate = 5 ;
+				}
+				else if ( vspd < 175 )
+				{
+					new_rate = 4 ;
+				}
+				else if ( vspd < 200 )
+				{
+					new_rate = 3 ;
+				}
+				else
+				{
+					new_rate = 2 ;
+				}
+			}
+			else
+			{
+				if (g_model.varioData.sinkTones )
+				{
+					if ( sounded == 0 )
+					{
+						new_rate = 20 ;
+						sounded = 3 ;
+						varioRepeatRate = 0 ;
+  	    	  audio.event( AU_VARIO_UP, 0 ) ;
+					}
+				}
+			}
+			if ( varioRepeatRate == 0 )
+			{
+				varioRepeatRate = new_rate ;
+			}
+		}
+	}
+}	
+
 
 
 
@@ -1691,98 +1828,98 @@ int16_t convertTelemConstant( int8_t channel, int8_t value)
 
   switch (channel)
 	{
-//    case V_RTC :
-//      result *= 12 ;
-//    break;
-//    case MODELTIME :
-//      result *= 20 ;
-//    break ;
-//    case RUNTIME :
-//      result *= 3 ;
-//    break ;
-//    case TIMER1 :
-//    case TIMER2 :
-//      result *= 10 ;
-//    break;
-//    case FR_ALT_BARO:
-//    case TELEM_GPS_ALT:
-//			if ( result > 63 )
-//			{
-//      	result *= 2 ;
-//      	result -= 64 ;
-//			}
-//			if ( result > 192 )
-//			{
-//      	result *= 2 ;
-//      	result -= 192 ;
-//			}
-//			if ( result > 448 )
-//			{
-//      	result *= 2 ;
-//      	result -= 488 ;
-//			}
-//			result *= 10 ;		// Allow for decimal place
-//      if ( g_model.FrSkyImperial )
-//      {
-//        // m to ft *105/32
-//        value = m_to_ft( result ) ;
-//      }
-//    break;
-//    case FR_RPM:
-//      result *= 100;
-//    break;
-//    case FR_TEMP1:
-//    case FR_TEMP2:
-//      result -= 30;
-//    break;
-//    case FR_A1_MAH:
-//    case FR_A2_MAH:
-//		case FR_AMP_MAH :
-//		case FR_RBOX_B1_CAP :
-//		case FR_RBOX_B2_CAP :
-//      result *= 50;
-//    break;
+    case V_RTC :
+      result *= 12 ;
+    break;
+    case MODELTIME :
+      result *= 20 ;
+    break ;
+    case RUNTIME :
+      result *= 3 ;
+    break ;
+    case TIMER1 :
+    case TIMER2 :
+      result *= 10 ;
+    break;
+    case FR_ALT_BARO:
+    case TELEM_GPS_ALT:
+			if ( result > 63 )
+			{
+      	result *= 2 ;
+      	result -= 64 ;
+			}
+			if ( result > 192 )
+			{
+      	result *= 2 ;
+      	result -= 192 ;
+			}
+			if ( result > 448 )
+			{
+      	result *= 2 ;
+      	result -= 488 ;
+			}
+			result *= 10 ;		// Allow for decimal place
+      if ( g_model.FrSkyImperial )
+      {
+        // m to ft *105/32
+        value = m_to_ft( result ) ;
+      }
+    break;
+    case FR_RPM:
+      result *= 100;
+    break;
+    case FR_TEMP1:
+    case FR_TEMP2:
+      result -= 30;
+    break;
+    case FR_A1_MAH:
+    case FR_A2_MAH:
+		case FR_AMP_MAH :
+		case FR_RBOX_B1_CAP :
+		case FR_RBOX_B2_CAP :
+      result *= 50;
+    break;
 
-//		case FR_CELL1:
-//		case FR_CELL2:
-//		case FR_CELL3:
-//		case FR_CELL4:
-//		case FR_CELL5:
-//		case FR_CELL6:
-//		case FR_CELL7:
-//		case FR_CELL8:
-//		case FR_CELL9:
-//		case FR_CELL10:
-//		case FR_CELL11:
-//		case FR_CELL12:
-//		case FR_CELL_MIN:
-//		case FR_SBEC_VOLT :
-//      result *= 2;
-//		break ;
-//		case FR_CELLS_TOT :
-//		case FR_VOLTS :
-//		case FR_CELLS_TOTAL1 :
-//		case FR_CELLS_TOTAL2 :
-//      result *= 2;
-//		break ;
-//		case FR_RBOX_B1_V :
-//		case FR_RBOX_B2_V :
-//      result *= 4 ;
-//		break ;
-//		case FR_RBOX_B1_A :
-//		case FR_RBOX_B2_A :
-//		case FR_SBEC_CURRENT :
-//      result *= 20;
-//		break ;
-//    case FR_WATT:
-//      result *= 8 ;
-//    break;
-//		case FR_VSPD :
-//			result = value * 10 ;
-//		break ;
-//		case FMODE :
-//			result = value ;
-//		break ;
+		case FR_CELL1:
+		case FR_CELL2:
+		case FR_CELL3:
+		case FR_CELL4:
+		case FR_CELL5:
+		case FR_CELL6:
+		case FR_CELL7:
+		case FR_CELL8:
+		case FR_CELL9:
+		case FR_CELL10:
+		case FR_CELL11:
+		case FR_CELL12:
+		case FR_CELL_MIN:
+		case FR_SBEC_VOLT :
+      result *= 2;
+		break ;
+		case FR_CELLS_TOT :
+		case FR_VOLTS :
+		case FR_CELLS_TOTAL1 :
+		case FR_CELLS_TOTAL2 :
+      result *= 2;
+		break ;
+		case FR_RBOX_B1_V :
+		case FR_RBOX_B2_V :
+      result *= 4 ;
+		break ;
+		case FR_RBOX_B1_A :
+		case FR_RBOX_B2_A :
+		case FR_SBEC_CURRENT :
+      result *= 20;
+		break ;
+    case FR_WATT:
+      result *= 8 ;
+    break;
+		case FR_VSPD :
+			result = value * 10 ;
+		break ;
+		case FMODE :
+			result = value ;
+		break ;
 		
 		default :
 			result = 0 ;
@@ -2744,7 +2881,15 @@ void doTenms()
 	if ( VoiceCheckFlag100mS & 1 )
 	{
 		processVoiceAlarms() ;
+		processVarioTones() ;
 		VoiceCheckFlag100mS = 0 ;
+   	for ( uint32_t i = 0 ; i < TELEMETRYDATALENGTH ; i += 1 )
+		{
+			if (TelemetryDataValid[i] )
+			{
+				TelemetryDataValid[i] -= 1 ;
+			}
+		}
 	}
 }
 
@@ -2773,6 +2918,10 @@ void popMenu(bool uppermost)
     g_menuStackPtr = uppermost ? 0 : g_menuStackPtr-1;
  		EnterMenu = EVT_ENTRY_UP ;
   }
+	if ( uppermost )
+	{
+		killEvents(EVT_KEY_LONG(KEY_EXIT)) ;
+	}
 }
 
 void chainMenu(MenuFuncP newMenu)
@@ -2923,7 +3072,6 @@ void checkCustom( uint8_t event )
 //#endif
 	
 	value = readControl( idx ) ;
-	Serial.println(value) ;
 	if ( ( value >= pdata->min ) && ( value <= pdata->max ) )
 	{
 		JustLoadedModel = 0 ;
@@ -2968,19 +3116,75 @@ void checkCustom( uint8_t event )
 	}	 
 }
 
+void checkSwitches( uint8_t event )
+{
+	uint32_t i ;
+	uint32_t k ;
+	uint16_t states = g_model.modelswitchWarningStates ;
+	
+	if ( states	& 1 )
+	{
+		chainMenu(checkCustom) ;
+		return ;
+	}
+	
+	states >>= 1 ;
+	states &= ~g_model.modelswitchWarningDisables ;
+	getMovedSwitch() ;
+	k = SwitchesStates & ~g_model.modelswitchWarningDisables ;
+
+	if ( (states & 0xFF) != (k & 0xFF ) )
+	{
+		uint16_t j ;
+
+	  lcd_img( 1, 0, HandImage, 0, 0 ) ;
+		lcd_putsAtt( 32, 0*FH, XPSTR("SWITCH"), DBLSIZE) ;
+		lcd_putsAtt( 32, 2*FH, PSTR(STR_WARNING), DBLSIZE) ;
+
+		j = 3 ;
+		for ( i = 0 ; i < 4 ; i += 1 )
+		{
+			if ( ( g_model.modelswitchWarningDisables & j ) == 0 )
+			{
+				uint8_t attr = 0 ;
+				if ( (states & j) != (k & j ) )
+				{
+ 		  		attr = INVERS ;
+					
+				}
+				// Display switch
+	  		lcd_putcAtt( 3*FW+i*(2*FW+2), 5*FH, 'A'+i, attr ) ;
+				lcd_putcAtt( 4*FW+i*(2*FW+2), 5*FH, PSTR(HW_SWITCHARROW_STR)[(states & j) >> (i*2)], attr ) ;
+			}
+			j <<= 2 ;
+		}
+
+		if ( event == EVT_KEY_BREAK(KEY_EXIT) )
+		{
+			chainMenu(checkCustom) ;
+			return ;
+		}	 
+	}
+	else
+	{
+		chainMenu(checkCustom) ;
+		return ;
+	}
+}
+
 
 void checkThrottle( uint8_t event )
 {
   if(g_eeGeneral.disableThrottleWarning)
 	{
 //		popMenu( 0 ) ;
-		chainMenu(checkCustom) ;
+		chainMenu(checkSwitches) ;
 		return ;
 	}
   if(g_model.disableThrottleCheck)
 	{
 //		popMenu( 0 ) ;
-		chainMenu(checkCustom) ;
+		chainMenu(checkSwitches) ;
 		return ;
 	}
 
@@ -2988,7 +3192,7 @@ void checkThrottle( uint8_t event )
 
 	if ( checkThrottlePosition() )
 	{
-		chainMenu(checkCustom) ;
+		chainMenu(checkSwitches) ;
 		return ;
 	}
 
@@ -3002,7 +3206,7 @@ void checkThrottle( uint8_t event )
 	if ( event == EVT_KEY_BREAK(KEY_EXIT) )
 	{
 //		popMenu( 0 ) ;
-		chainMenu(checkCustom) ;
+		chainMenu(checkSwitches) ;
 		return ;
 	}	 
 }
@@ -3055,6 +3259,28 @@ void loop(void)
 
 			AUDIO_HEARTBEAT() ;
 
+			{
+				uint16_t a = 0 ;
+				uint16_t b = 0 ;
+//				int32_t x ;
+    
+				uint16_t lightoffctr ;
+				lightoffctr = g_LightOffCounter ;
+				if(lightoffctr) lightoffctr -= 1 ;
+//				x = (EncoderCount >> 1) - LastRotaryValue ;
+				if( event )
+				{
+					a = g_eeGeneral.lightAutoOff*500 ; // on keypress turn the light on 5*100
+					InacCounter = 0 ;
+				}
+				if(InactivityMonitor) b = g_eeGeneral.lightOnStickMove*500 ;
+				if(a>lightoffctr) lightoffctr = a ;
+				if(b>lightoffctr) lightoffctr = b ;
+				g_LightOffCounter = lightoffctr ;
+  			InactivityMonitor = 0 ; //reset this flag
+			}
+			check_backlight() ;
+
 //			readAnalog() ;
 
 //			for( uint32_t i = 0 ; i < 4 ; i += 1 ) // calc Sticks
@@ -3090,6 +3316,28 @@ void loop(void)
 					event = getEvent() ;
 					checkTrim( event ) ;
 				}
+			}
+
+			if ( ( event == 0 ) || ( event == EVT_KEY_REPT(KEY_MENU) ) )
+			{
+				uint8_t timer = LongMenuTimer ;
+				if ( menuPressed() )
+				{
+					if ( timer < 255 )
+					{
+						timer += 1 ;
+					}
+				}
+				else
+				{
+					timer = 0 ;
+				}
+				if ( timer == 200 )
+				{
+					event = EVT_TOGGLE_GVAR ;
+					timer = 255 ;
+				}
+				LongMenuTimer = timer ;
 			}
 
 			if ( PowerStart == 0 )
@@ -3296,6 +3544,18 @@ extern uint32_t TotalExecTime ;
 			VoiceCheckFlag100mS |= 6 ;// Set switch current states (global)
 
 			Activated = 1 ;
+
+			if ( g_eeGeneral.welcomeType == 0 )
+			{
+				if(!g_eeGeneral.disableSplashScreen)
+  		  {
+					voiceSystemNameNumberAudio( SV_WELCOME, V_HELLO, AU_TADA ) ;
+  		  }
+			}
+			else if ( g_eeGeneral.welcomeType == 2 )
+			{
+				putNamedVoiceQueue( (char *)g_eeGeneral.welcomeFileName, VLOC_USER ) ;
+			}
 
 			g_vbat10mV = ( 930 * (uint32_t)AnalogData[4] ) / 4096 ;
 
@@ -3634,6 +3894,51 @@ void timer(int16_t throttle_val)
 	}
 }
 
+int32_t getMovedSwitch()
+{
+	uint8_t skipping = 0 ;
+  int8_t result = 0 ;
+
+	static uint16_t s_last_time = 0 ;
+	uint16_t time = get_tmr10ms() ;
+  if ( (uint16_t)(time - s_last_time) > 10)
+	{
+		skipping = 1 ;
+	}
+  s_last_time = time ;
+
+  for (uint32_t i = 0 ; i < 4 ; i += 1 )
+	{
+    uint16_t mask = (0x03 << (i*2)) ;
+    uint8_t prev = (SwitchesStates & mask) >> (i*2) ;
+		uint8_t next = switchPosition( i ) ;
+
+    if (prev != next)
+		{
+      SwitchesStates = (SwitchesStates & (~mask)) | (next << (i*2));
+      if (i<5)
+        result = 1+(3*i)+next;
+      else if (i==5)
+			{
+        result = -(1+(3*5)) ;
+				if (next!=0) result = -result ;
+			}
+      else if (i==6)
+        result = 1+(3*5)+1+next;
+      else
+			{
+        result = -(1+(3*5)+1+3) ;
+				if (next!=0) result = -result ;
+			}
+    }
+  }
+
+  if ( skipping )
+	{
+    result = 0 ;
+	}
+  return result ;
+}
 
 //#include "stamp-erskyTx.h"
 
@@ -3655,4 +3960,26 @@ void menuVersion(uint8_t event)
 		
 }
 
+extern void backlightOff() ;
+extern void backlightOn() ;
+
+#define BACKLIGHT_ON backlightOn()
+#define BACKLIGHT_OFF backlightOff()
+
+void check_backlight()
+{
+	int8_t sw = g_model.mlightSw ;
+	if ( !sw )
+	{
+		sw = g_eeGeneral.lightSw ;
+	}
+  if(getSwitch00(sw) || g_LightOffCounter)
+	{
+		BACKLIGHT_ON ;
+	}
+  else
+	{
+    BACKLIGHT_OFF ;
+	}
+}
 

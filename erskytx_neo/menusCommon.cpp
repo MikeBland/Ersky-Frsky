@@ -108,6 +108,8 @@ const char s_charTab[]=" ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012
 
 extern const uint8_t SwitchFunctionMap[] ;
 
+int32_t getMovedSwitch() ;
+
 uint8_t yesNoMenuExit( uint8_t event, const char * s )
 {
 	uint8_t reply = YN_NONE ;
@@ -1889,6 +1891,11 @@ void menu_lcd_onoff( uint8_t x,uint8_t y, uint8_t value, uint8_t mode )
 	lcd_hbar( x, y, 7, 7, mode ? 100 : 0 ) ;
 }
 
+void lcd_xlabel_decimal( uint8_t x, uint8_t y, uint16_t value, uint8_t attr, const char *s )
+{
+  lcd_outdezAtt( x, y, value, attr ) ;
+	lcd_puts_Pleft( y, s ) ;
+}
 
 uint8_t checkIndexed( uint16_t y, const char *s, uint8_t value, uint8_t edit )
 {
@@ -2108,7 +2115,8 @@ int16_t checkIncDec16( int16_t val, int16_t i_min, int16_t i_max, uint8_t i_flag
 	{
 		if ( editAllowed )
 		{
-			if ( menuPressed() )
+			if ( ~AwBits & 0x40000 )	// Enter/Shift pressed
+//			if ( menuPressed() )
 			{
     		newval += StepSize ;
 			}		 
@@ -2124,7 +2132,8 @@ int16_t checkIncDec16( int16_t val, int16_t i_min, int16_t i_max, uint8_t i_flag
 	{
 		if ( editAllowed )
 		{
-			if ( menuPressed() )
+			if ( ~AwBits & 0x40000 )	// Enter/Shift pressed
+//			if ( menuPressed() )
 			{
     		newval -= StepSize ;
 			}		 
@@ -2161,8 +2170,8 @@ int16_t checkIncDec16( int16_t val, int16_t i_min, int16_t i_max, uint8_t i_flag
 	{
 		if ( s_editMode )
 		{
-//    	int8_t swtch = getMovedSwitch();
-    	int8_t swtch = 0 ;
+    	int8_t swtch = getMovedSwitch();
+//    	int8_t swtch = 0 ;
     	if (swtch)
 			{
 //	#if defined(PCBSKY) || defined(PCB9XT)

@@ -26,6 +26,10 @@ WiFiClient Client ;
 #define DEST_SCRIPTS	4
 #define DEST_UPDATE		5
 
+#define FORM_TYPE_UPDATE		0
+#define FORM_TYPE_UPLOAD		1
+
+
 uint8_t UploadState ;
 
 const uint8_t IconBase64[] = {
@@ -239,41 +243,38 @@ void sendIcon(WiFiClient client)
 }
 
 
-void sendMainForm(WiFiClient client)
-{
-	client.println("HTTP/1.1 200 OK") ;
-	client.println("Content-Type: text/html; charset=UTF-8") ;
-	client.println("") ;
-	client.println("<!DOCTYPE HTML>") ;
-	client.println("<html>") ;
-	client.println("<head>") ;
-	client.println("<title>Frsky Neo</title>") ;
+//void sendMainForm(WiFiClient client)
+//{
+//	client.println("HTTP/1.1 200 OK") ;
+//	client.println("Content-Type: text/html; charset=UTF-8") ;
+//	client.println("") ;
+//	client.println("<!DOCTYPE HTML>") ;
+//	client.println("<html>") ;
+//	client.println("<head>") ;
+//	client.println("<title>Frsky Neo</title>") ;
 
-	sendIcon(client) ;
+//	sendIcon(client) ;
   					
-	client.println("</head>") ;
-	client.println("<body>") ;
-	sendLogo(client) ;
-	client.println("</br></br>") ;
+//	client.println("</head>") ;
+//	client.println("<body>") ;
+//	sendLogo(client) ;
+//	client.println("</br></br>") ;
 		
-	client.println("<form method=\"post\" >");
+//	client.println("<form method=\"post\" >");
 	
-	client.println("<br><br><input type=\"submit\" value=\"Update\" name=\"Update Firmware\">");
-	client.println("<br><br><input type=\"submit\" value=\"Upload File(s)\" name=\"Upload File(s)\">");
-	client.println("</form>");
+//	client.println("<br><br><input type=\"submit\" value=\"Update\" name=\"Update Firmware\">");
+//	client.println("<br><br><input type=\"submit\" value=\"Upload File(s)\" name=\"Upload File(s)\">");
+//	client.println("</form>");
 
-	client.println("</br>") ;
+//	client.println("</br>") ;
 
-	client.println("</br>") ;
-	client.println("</body>") ;
-	client.println("</html>") ;
+//	client.println("</br>") ;
+//	client.println("</body>") ;
+//	client.println("</html>") ;
 	
-}
+//}
 
-
-
-
-void sendUploadForm(WiFiClient client)
+void sendUploadForm(WiFiClient client, uint32_t type)
 {
   					// Return the response
 	client.println("HTTP/1.1 200 OK") ;
@@ -283,7 +284,21 @@ void sendUploadForm(WiFiClient client)
 	client.println("<html>") ;
 	client.println("<head>") ;
 	client.println("<title>Frsky Neo</title>") ;
-		
+	client.println("<style>\r\n" ) ;
+	client.println(".button { border: 2px solid black; color: black; padding: 5px 10px; cursor: pointer; background-color: #80E0FF;}" ) ;
+	client.println("</style>\r\n" ) ;
+
+//	<style type="text/css">
+//.submit input
+//    {
+//    color: #000;
+//    background: #ffa20f;
+//    border: 2px outset #d7b9c9
+//    }
+//</style>
+
+//<input type="submit" class="submit"/>
+
 	sendIcon(client) ;
   					
 	client.println("</head>") ;
@@ -302,25 +317,74 @@ void sendUploadForm(WiFiClient client)
 //	  client.print("LED is On</br>") ;
 //	  client.println("Turn the LED <a href=\"/LED=OFF\">OFF</a></br>") ;
 //	}
-		
-	client.println("<form action=\"upload\" method=\"post\" enctype=\"multipart/form-data\">");
-	client.println("<br><label for=\"Destination\">Choose destination:</label>");
-  client.println("<select name=\"Destination\" id=\"Destination\">");
 
-	sendDestOption( client, "SPIFFS", DestinationIndex == DEST_SPIFFS ) ;
-	sendDestOption( client, "voice/system", DestinationIndex == DEST_V_SYSTEM  ) ;
-	sendDestOption( client, "voice/user", DestinationIndex == DEST_V_USER  ) ;
-	sendDestOption( client, "TEXT", DestinationIndex == DEST_TEXT  ) ;
-	sendDestOption( client, "SCRIPTS", DestinationIndex == DEST_SCRIPTS  ) ;
-	sendDestOption( client, "UPDATE", DestinationIndex == DEST_UPDATE  ) ;
-  
-	client.println("</select>");
-	client.println("<br><br>Select file to upload:");
-	client.println("<input type=\"file\" name=\"fileToUpload[]\" multiple id=\"fileToUpload\"><br>");
-	client.println("<br><br><input type=\"submit\" value=\"Upload File(s)\" name=\"submit\">");
+// OR
+
+//	<style> 
+//input[type=button], input[type=submit], input[type=reset] {
+//  background-color: #04AA6D;
+//  border: none;
+//  color: white;
+//  padding: 16px 32px;
+//  text-decoration: none;
+//  margin: 4px 2px;
+//  cursor: pointer;
+
+//	border-radius: 8px; ????
+
+//}
+//</style>
+//</head>
+//<body>
+
+//<h2>Styling form buttons</h2>
+
+//<input type="button" value="Button">
+//<input type="reset" value="Reset">
+//<input type="submit" value="Submit">
+
+	if ( type == FORM_TYPE_UPDATE )
+	{
+		client.println("<br><br><button class=\"button\" onclick=\"window.location.href='/Filesend';\">Upload Files</button>\r\n<br><br>" ) ;
+		client.println("<form action=\"update\" method=\"post\" enctype=\"multipart/form-data\">");
+	}
+
+	
+	if ( type == FORM_TYPE_UPLOAD )
+	{
+		client.println("<form action=\"upload\" method=\"post\" enctype=\"multipart/form-data\">");
+		client.println("<br><label for=\"Destination\">Choose destination:</label>");
+	  client.println("<select name=\"Destination\" id=\"Destination\">");
+	
+		sendDestOption( client, "SPIFFS", DestinationIndex == DEST_SPIFFS ) ;
+		sendDestOption( client, "voice/system", DestinationIndex == DEST_V_SYSTEM  ) ;
+		sendDestOption( client, "voice/user", DestinationIndex == DEST_V_USER  ) ;
+		sendDestOption( client, "TEXT", DestinationIndex == DEST_TEXT  ) ;
+		sendDestOption( client, "SCRIPTS", DestinationIndex == DEST_SCRIPTS  ) ;
+//		sendDestOption( client, "UPDATE", DestinationIndex == DEST_UPDATE  ) ;
+	
+		client.println("</select>");
+		client.println("<br><br>Select file to upload:");
+		client.println("<input type=\"file\" name=\"fileToUpload[]\" multiple id=\"fileToUpload\"><br>");
+		client.println("<br><br><input type=\"submit\" value=\"Upload File(s)\" name=\"submit\">");
+	}
+	
+	if ( type == FORM_TYPE_UPDATE )
+	{
+		client.println("</select>");
+		client.println("<br><br>Select file for update:");
+		client.println("<input type=\"file\" name=\"fileToUpload[]\" id=\"fileToUpload\"><br>");
+		client.println("<br><br><input type=\"submit\" value=\"Update Firmware\" name=\"submit\">");
+  }
+
 	client.println("</form>");
 
 	client.println("</br>") ;
+	
+	if ( type == FORM_TYPE_UPLOAD )
+	{
+		client.println("<a href=\"/\">Return to main page</a>") ;
+	}
 
 	client.println("</br>") ;
 	client.println("</body>") ;
@@ -506,6 +570,27 @@ void frskyWifi()
 									FileName[0] = '\0' ;
 									DestinationIndex = DEST_SPIFFS ;
 								}
+					  		if (strstr( Request, "POST /update" ) )
+								{
+									UploadState = UP_HEADER1 ;
+									RequestLength = 0 ;
+									Request[0] = '\0' ;
+									Serial.println("Found POST") ;
+									FileName[0] = '\0' ;
+									DestinationIndex = DEST_UPDATE ;
+								}
+					  		if (strstr( Request, "GET" ) )
+								{
+					  			if (strstr( Request, "Filesend" ) )
+									{
+										Flushing = 1 ;
+										RequestLength = 0 ;
+										Request[0] = '\0' ;
+										Serial.println("Found GET PageFiles") ;
+										FileName[0] = '\0' ;
+										PageToSend = 3 ;
+									}
+								}
 							}
 							else if ( UploadState == UP_HEADER1 )
 							{
@@ -557,10 +642,10 @@ void frskyWifi()
 									{
 										DestinationIndex = DEST_SCRIPTS ;
 									}
-					  			else if ( position = strstr( Request, "UPDATE" ) )
-									{
-										DestinationIndex = DEST_UPDATE ;
-									}
+//					  			else if ( position = strstr( Request, "UPDATE" ) )
+//									{
+//										DestinationIndex = DEST_UPDATE ;
+//									}
 									Serial.println() ;
 									Serial.print("Destination :") ;
 									Serial.println(Dirs[DestinationIndex] ) ;
@@ -753,7 +838,7 @@ void frskyWifi()
 						switch ( PageToSend )
 						{
 							case 0 :
-								sendUploadForm( Client ) ;
+								sendUploadForm( Client, FORM_TYPE_UPDATE ) ;
 							break ;
 							case 1 :
 								sendUploadResult( Client, 0 ) ;
@@ -762,7 +847,7 @@ void frskyWifi()
 								sendUploadResult( Client, 1 ) ;
 							break ;
 							case 3 :
-								sendMainForm( Client ) ;
+								sendUploadForm( Client, FORM_TYPE_UPLOAD ) ;
 							break ;
 						}
 			 			PageToSend = 0 ;

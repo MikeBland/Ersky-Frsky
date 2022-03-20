@@ -90,7 +90,69 @@ enum CrossfireSensorIndexes {
 
 #define TELEMETRY_RX_PACKET_SIZE	128
 
+// Translate hub data positions
+const uint8_t Fr_indices[] = 
+{
+	TELEMETRYDATALENGTH-1,
+	TELEM_GPS_ALT | 0x80,
+	FR_TEMP1,
+	FR_RPM,
+	FR_FUEL,
+	FR_TEMP2,
+	FR_CELL_V,
+	FR_VCC,           // 0x07  Extra data for Mavlink via FrSky
+	TELEMETRYDATALENGTH-1,
+//	HUBDATALENGTH-1,HUBDATALENGTH-1,
+	TELEM_GPS_ALTd,	// 9
+/* Extra data 1 for Mavlink via FrSky */
+	FR_HOME_DIR,      // 0x0A
+	FR_HOME_DIST,     // 0x0B
+	FR_CPU_LOAD,      // 0x0C
+	FR_GPS_HDOP,      // 0x0D
+	FR_WP_NUM,        // 0x0E
+	FR_WP_BEARING,    // 0x0F
+/* Extra data 1 for Mavlink via FrSky */
+//	HUBDATALENGTH-1,HUBDATALENGTH-1,
+//	HUBDATALENGTH-1,HUBDATALENGTH-1,HUBDATALENGTH-1,HUBDATALENGTH-1,
+	FR_ALT_BARO | 0x80,
+	FR_GPS_SPEED | 0x80,
+	FR_GPS_LONG | 0x80,
+	FR_GPS_LAT | 0x80,
+	FR_COURSE,		// 20
+	FR_GPS_DATMON,
+	FR_GPS_YEAR,
+	FR_GPS_HRMIN,
+	FR_GPS_SEC,
+	FR_GPS_SPEEDd,
+	FR_GPS_LONGd,
+	FR_GPS_LATd,
+	FR_COURSEd,		// 28
+/* Extra data 2 for Mavlink via FrSky */
+	FR_BASEMODE,
+	FR_WP_DIST,
+	FR_HEALTH,
+	FR_MSG,
+/* Extra data 2 for Mavlink via FrSky */
+//	HUBDATALENGTH-1,HUBDATALENGTH-1,HUBDATALENGTH-1,HUBDATALENGTH-1,
+	FR_ALT_BAROd,
+	FR_LONG_E_W,
+	FR_LAT_N_S,
+	FR_ACCX,
+	FR_ACCY,
+	FR_ACCZ,
+	FR_VSPD,
+	FR_CURRENT,		// 40
+	FR_V_AMP | 0x80,
+	FR_V_AMPd,
+	FR_VOLTS,
+	FR_AIRSPEED,
+	TELEMETRYDATALENGTH-1		// 45
+} ;
+
+
 struct t_elrsConfig ElrsConfig ;
+
+struct t_s6r S6Rdata ;
 
 struct t_updateTiming
 {
@@ -120,15 +182,52 @@ FrskyData FrskyTelemetry[9] ;
 
 uint8_t AltitudeZeroed = 0 ;
 uint8_t AltitudeDecimals ;
+uint8_t GpsAltitudeDecimals ;
 int16_t WholeAltitude ;
+int16_t WholeGpsAltitude ;
 int16_t AltOffset ;
 
+uint8_t FrskyBattCells[2] = {0,0} ;
+uint8_t SbecCount ;
+uint16_t SbecAverage ;
+
 uint16_t XjtVersion ;
+uint8_t VfasVoltageTimer ;
 
 int16_t TelemetryData[TELEMETRYDATALENGTH] ;  // All 38 words
 uint8_t TelemetryDataValid[TELEMETRYDATALENGTH] ;  // All 38 words
 
 static uint8_t A1Received = 0 ;
+
+void store_cell_data( uint8_t battnumber, uint16_t cell )
+{
+	if ( battnumber < 12 )
+	{
+		cell = ( cell & 0x0FFF ) / 5 ;
+//		FrskyVolts[battnumber] = cell ;
+//		FrskyHubData[FR_CELL1+battnumber] = FrskyVolts[battnumber] ;
+		uint32_t index ;
+	  index = FR_CELL1+battnumber ;
+		uint32_t scaling = 1000 + g_model.cellScalers[battnumber] ;
+		scaling *= cell ;
+		cell = scaling / 1000 ;
+		TelemetryData[index] = cell ;
+		TelemetryDataValid[index] = 40 + g_model.telemetryTimeout ;
+//		TelemetryDataValid[FR_CELLS_TOT] = 40 + g_model.telemetryTimeout ;
+		TelemetryDataValid[FR_CELL_MIN] = 40 + g_model.telemetryTimeout ;
+		if ( battnumber == 0 )
+		{
+			if ( TelemetryData[FR_CELL_MIN] == 0 )
+			{
+				TelemetryData[FR_CELL_MIN] = 450 ;
+			}
+			if ( cell < TelemetryData[FR_CELL_MIN] )
+			{
+				TelemetryData[FR_CELL_MIN] = cell ;
+			}
+		}
+	}
+}
 
 void storeAltitude( int16_t value )
 {
@@ -209,12 +308,218 @@ void storeTelemetryData( uint8_t index, uint16_t value )
 		TelemetryData[TELEM_GPS_ALT] = value ;
 		TelemetryDataValid[TELEM_GPS_ALT] = 25 + g_model.telemetryTimeout ;
 	}
+	else if ( index == TELEM_GPS_ALT )
+	{
+		value *= 10 ;
+		WholeGpsAltitude = value ;
+		index = FR_TRASH ;
+	}
+	if ( index == TELEM_GPS_ALTd )
+	{
+		GpsAltitudeDecimals |= 1 ;
+		if ( ( value > 9 ) || ( value < -9 ) )
+		{
+			GpsAltitudeDecimals |= 2 ;
+		}
+		if ( GpsAltitudeDecimals & 2 )
+		{
+			value /= 10 ;			
+		}
+		index = TELEM_GPS_ALT ;	// For max/min
+		value += WholeGpsAltitude ;
+	}
+	
 
 	if ( index < TELEMETRYDATALENGTH )
 	{
-		TelemetryData[index] = value ;           /* ReSt */
-		TelemetryDataValid[index] = 25 + g_model.telemetryTimeout ;
+    if ( !g_model.FrSkyGpsAlt )         
+    {
+      if ( index != FR_ALT_BARO )
+			{
+				TelemetryData[index] = value ;           /* ReSt */
+				TelemetryDataValid[index] = 25 + g_model.telemetryTimeout ;
+			}
+    }                     
+		else
+		{
+      if ( index != FR_ALT_BARO )
+			{
+				TelemetryData[index] = value ;           /* ReSt */
+			}
+      if ( index == TELEM_GPS_ALT )
+      {
+         storeAltitude( TelemetryData[TELEM_GPS_ALT] ) ;      // Copy Gps Alt instead
+         index = FR_ALT_BARO ;         // For max and min
+      }
+			TelemetryDataValid[index] = 25 + g_model.telemetryTimeout ;
+		}
+
+		if ( index == FR_CURRENT )			// FAS current
+		{
+			if ( value > g_model.FASoffset )
+			{
+				value -= g_model.FASoffset ;
+			}
+			else
+			{
+				value = 0 ;
+			}
+			TelemetryData[index] = value ;
+			TelemetryDataValid[index] = 25 + g_model.telemetryTimeout ;
+		}
+
+		if ( index == FR_CELL_V )			// Cell Voltage
+		{
+			// It appears the cell voltage bytes are in the wrong order
+//  							uint8_t battnumber = ( FrskyHubData[6] >> 12 ) & 0x000F ;
+  		uint8_t battnumber = ((uint8_t)value >> 4 ) & 0x000F ;
+  		if (FrskyBattCells[0] < battnumber+1)
+			{
+ 				if (battnumber+1>=6)
+				{
+  				FrskyBattCells[0]=6;
+ 					if (battnumber+1 <= 12 )
+					{
+  					FrskyBattCells[1]=battnumber+1-6;
+					}
+  			}
+				else
+				{
+  				FrskyBattCells[0] = battnumber+1 ;
+  			}
+  		}
+			if ( battnumber < 12 )
+			{
+				store_cell_data( battnumber, ( ( value & 0x0F ) << 8 ) + (value >> 8) ) ;
+			}
+
+			uint8_t totalCells ;
+			for ( totalCells = 0 ; totalCells < 12 ; )
+			{
+				if ( TelemetryDataValid[FR_CELL1+totalCells] )
+				{
+					totalCells += 1 ;
+				}
+				else
+				{
+					break ;
+				}
+			}
+  		if (FrskyBattCells[0] <= totalCells )
+			{
+ 				if ( totalCells >= 5 )
+				{
+  				FrskyBattCells[0] = 6 ;
+ 					if ( totalCells <= 11 )
+					{
+  					FrskyBattCells[1] = totalCells - 5 ;
+					}
+  			}
+				else
+				{
+  				FrskyBattCells[0] = totalCells + 1 ;
+					FrskyBattCells[1] = 0 ;
+  			}
+  		}
+		}
+		if ( index == FR_RPM )			// RPM
+		{
+			uint32_t x ;
+
+			x = value ;
+			x *= 60 ;
+			if ( g_model.numBlades == 0 )
+			{
+				g_model.numBlades = 1 ;
+			}
+			TelemetryData[FR_RPM] = x / g_model.numBlades ;
+//			TelemetryDataValid[FR_RPM] = 25 + g_model.telemetryTimeout ;
+//			FrskyHubData[FR_RPM] = x / ( g_model.Mavlink == 0 ? g_model.numBladesb : g_model.numBlades * 30) ;
+		}
+		if ( index == FR_V_AMPd )
+		{
+			TelemetryData[FR_VOLTS] = (TelemetryData[FR_V_AMP] * 10 + value) * 21 / 11 ;
+			TelemetryDataValid[FR_VOLTS] = 25 + g_model.telemetryTimeout ;
+		}
+		if ( index == FR_SBEC_CURRENT )
+		{
+			SbecAverage += value ;
+			if ( ++SbecCount >= 4 )
+			{
+				SbecCount = 0 ;
+				value = ( SbecAverage + 3 ) >> 2 ;
+				TelemetryData[index] = value ;
+				SbecAverage = 0 ;
+			}
+		}
 	}
+}
+
+const uint8_t DestIndex[] = { FR_BASEMODE, FR_CURRENT, FR_AMP_MAH, FR_VOLTS, FR_FUEL, FR_RBOX_STATE, FR_CUST1, 
+FR_CUST2, FR_CUST3, FR_CUST4, FR_CUST5, FR_CUST6, FR_AIRSPEED, FR_CUST7, FR_CUST8, FR_CUST9, FR_CUST10	 } ;
+
+void store_telemetry_scaler( uint8_t index, int16_t value )
+{
+	if ( index )
+	{
+		if ( index == 5 )	// FUEL
+		{
+			if ( value < 0 )
+			{
+				value = 0 ;
+			}
+		}
+		if ( index <= sizeof(DestIndex) )
+		{
+			storeTelemetryData( DestIndex[index-1], value ) ;
+		}
+	}
+}
+
+
+void handleUnknownId( uint16_t id, uint32_t value )
+{
+	uint32_t i ;
+	for ( i = 0 ; i < g_model.extraSensors ; i += 1 )
+	{
+		if ( g_model.extraId[i].id == id )
+		{
+			// do something with it?
+			store_telemetry_scaler( g_model.extraId[i].dest, value ) ;
+			return ;
+		}
+	}
+
+	if ( g_model.extraSensors < NUMBER_EXTRA_IDS )
+	{
+		g_model.extraId[g_model.extraSensors++].id = id ;
+	}
+}
+
+void store_indexed_hub_data( uint8_t index, uint16_t value )
+{
+	if ( index > 57 )
+	{
+		index -= 17 ;		// Move voltage-amp sensors							
+	}									// 58->41, 59->42
+	if ( index == 48 )
+	{
+		index = 39 ;	//FR_VSPD ;		// Move Vario							
+	}
+	if ( index == 57 )
+	{
+		index = 43 ;	//FR_VOLTS ;		// Move Oxsensor voltage
+	}
+	if ( index == 56 )
+	{
+		index = 44 ;	//FR_AIRSPEED
+	}
+	if ( index > sizeof(Fr_indices) )
+	{
+		index = 0 ;	// Use a discard item							
+	}
+  index = Fr_indices[index] & 0x7F ;
+	storeTelemetryData( index, value ) ;
 }
 
 
@@ -277,7 +582,7 @@ void processSportData( uint8_t *packet, uint32_t receiver )
 					FrskyTelemetry[1].set(value, FR_A2_COPY ); //FrskyHubData[] =  frskyTelemetry[1].value ;
 				break ;
     		  
-//				case 5 : // SWR
+				case 5 : // SWR
 //#if defined(PCBX9D) && (defined(REVPLUS) || defined(REV9E))
 //					if ( !( XjtVersion != 0 && XjtVersion != 0xff ) )
 //					{
@@ -287,8 +592,8 @@ void processSportData( uint8_t *packet, uint32_t receiver )
 //						}
 //					}
 //#endif
-//					FrskyTelemetry[3].set(value, FR_TXRSI_COPY ); //FrskyHubData[] =  frskyTelemetry[3].value ;
-//				break ;
+					FrskyTelemetry[3].set(value, FR_TXRSI_COPY ); //FrskyHubData[] =  frskyTelemetry[3].value ;
+				break ;
 				case 6 : // XJT VERSION
 					XjtVersion = (*((uint16_t *)(packet+4))) ;
 //#if defined(PCBX9D) && (defined(REVPLUS) || defined(REV9E))
@@ -316,36 +621,36 @@ void processSportData( uint8_t *packet, uint32_t receiver )
 				storeTelemetryData( FR_VFR, packet[4] | (packet[5] << 8 ) ) ;
 			}
 		}
-//		else if ( packet[3] == 0 )
-//		{ // old sensors
-//  	  FrskyUsrStreaming = 255 ; //FRSKY_USR_TIMEOUT10ms ; // reset counter only if valid frsky packets are being detected
-//			FrskyStreaming = FRSKY_TIMEOUT10ms * 3 ; // reset counter only if valid frsky packets are being detected
-//			uint16_t value = (*((uint16_t *)(packet+4))) ;
-//			store_indexed_hub_data( packet[2], value ) ;
-//		}
-//		else
-//		{ // new sensors
-//			FrskyStreaming = FRSKY_TIMEOUT10ms * 3 ; // reset counter only if valid frsky packets are being detected
-//  	  FrskyUsrStreaming = 255 ; //FRSKY_USR_TIMEOUT10ms ; // reset counter only if valid frsky packets are being detected
-//			uint8_t id = (packet[3] << 4) | ( packet[2] >> 4 ) ;
-//			uint32_t value = (*((uint32_t *)(packet+4))) ;
+		else if ( packet[3] == 0 )
+		{ // old sensors
+  	  FrskyUsrStreaming = 255 ; //FRSKY_USR_TIMEOUT10ms ; // reset counter only if valid frsky packets are being detected
+			FrskyStreaming = FRSKY_TIMEOUT10ms * 3 ; // reset counter only if valid frsky packets are being detected
+			uint16_t value = (*((uint16_t *)(packet+4))) ;
+			store_indexed_hub_data( packet[2], value ) ;
+		}
+		else
+		{ // new sensors
+			FrskyStreaming = FRSKY_TIMEOUT10ms * 3 ; // reset counter only if valid frsky packets are being detected
+  	  FrskyUsrStreaming = 255 ; //FRSKY_USR_TIMEOUT10ms ; // reset counter only if valid frsky packets are being detected
+			uint8_t id = (packet[3] << 4) | ( packet[2] >> 4 ) ;
+			uint32_t value = (*((uint32_t *)(packet+4))) ;
 
-//			if ( (packet[3] & 0xF0) != 0x50 )
-//			{
-//				if ( ( packet[2] & 0x0F ) != 0 )
-//				{
-//			 		id = NON_STANDARD_ID_8 ;
-//				}
-//				switch ( id )
-//				{
-//					case ALT_ID_8 :
-//						value = (int32_t)value / 10 ;
-//						storeTelemetryData( FR_SPORT_ALT, value ) ;
-//					break ;
+			if ( (packet[3] & 0xF0) != 0x50 )
+			{
+				if ( ( packet[2] & 0x0F ) != 0 )
+				{
+			 		id = NON_STANDARD_ID_8 ;
+				}
+				switch ( id )
+				{
+					case ALT_ID_8 :
+						value = (int32_t)value / 10 ;
+						storeTelemetryData( FR_SPORT_ALT, value ) ;
+					break ;
 
-//					case VARIO_ID_8 :
-//						storeTelemetryData( FR_VSPD, value ) ;
-//					break ;
+					case VARIO_ID_8 :
+						storeTelemetryData( FR_VSPD, value ) ;
+					break ;
 
 //	//				case BETA_ALT_ID_8 :
 //	//					value = (int32_t)value >> 8 ;
@@ -390,214 +695,214 @@ void processSportData( uint8_t *packet, uint32_t receiver )
 //	//				}
 //	//				break ;
 
-//					case CURR_ID_8 :
-//						storeTelemetryData( FR_CURRENT, value ) ;
-//					break ;
+					case CURR_ID_8 :
+						storeTelemetryData( FR_CURRENT, value ) ;
+					break ;
 
-//					case VFAS_ID_8 :
-//						storeTelemetryData( FR_VOLTS, value / 10 ) ;
-//						VfasVoltageTimer = 50 ;
-//					break ;
-				
-//					case RPM_ID_8 :
-//						storeTelemetryData( FR_RPM, value / 60 ) ;
-//					break ;
-
-//	//				case A3_ID_8 :
-//	//				{	
-//	//					uint16_t ratio = g_model.frsky.channels[0].ratio3_4 ;
-//	//					if ( ratio == 0 )
-//	//					{
-//	//						ratio = 330 ;
-//	//					}
-//	//					value = value * ratio / 33000 ;
-//	//					storeTelemetryData( FR_A3, value ) ;
-//	//				}
-//	//				break ;
-
-//	//				case A4_ID_8 :
-//	//				{	
-//	//					uint16_t ratio = g_model.frsky.channels[1].ratio3_4 ;
-//	//					if ( ratio == 0 )
-//	//					{
-//	//						ratio = 330 ;
-//	//					}
-//	//					value = value * ratio / 33000 ;					
-//	//					storeTelemetryData( FR_A4, value ) ;
-//	//				}
-//	//				break ;
-
-//					case T1_ID_8 :
-//	//					if ( ( g_model.telemetryProtocol == TELEMETRY_ARDUCOPTER ) || ( g_model.telemetryProtocol == TELEMETRY_ARDUPLANE ) )
-//	//					{
-//	//						storeTelemetryData( FR_TEMP2, value ) ;
-//	//					}
-//	//					else
-//						{
-//							storeTelemetryData( FR_TEMP1, value ) ;
-//						}
-//					break ;
-				
-//					case T2_ID_8 :
-//	//					if ( ( g_model.telemetryProtocol == TELEMETRY_ARDUCOPTER ) || ( g_model.telemetryProtocol == TELEMETRY_ARDUPLANE ) )
-//	//					{
-//	//						storeTelemetryData( FR_BASEMODE, value ) ;
-//	//					}
-//	//					else
-//						{
-//							storeTelemetryData( FR_TEMP2, value ) ;
-//						}
-//					break ;
-
-//					case ACCX_ID_8 :
-//						storeTelemetryData( FR_ACCX, value ) ;
-//					break ;
-				
-//					case ACCY_ID_8 :
-//						storeTelemetryData( FR_ACCY, value ) ;
-//					break ;
+					case VFAS_ID_8 :
+						storeTelemetryData( FR_VOLTS, value / 10 ) ;
+						VfasVoltageTimer = 50 ;
+					break ;
 			
-//					case ACCZ_ID_8 :
-//						storeTelemetryData( FR_ACCZ, value ) ;
-//					break ;
+					case RPM_ID_8 :
+						storeTelemetryData( FR_RPM, value / 60 ) ;
+					break ;
 
-//					case FUEL_ID_8 :
-//	//					if ( ( g_model.telemetryProtocol == TELEMETRY_ARDUCOPTER ) || ( g_model.telemetryProtocol == TELEMETRY_ARDUPLANE ) )
-//	//					{
-//	//						storeTelemetryData( FR_TEMP1, value ) ;
-//	//					}
-//	//					else
-//						{
-//							storeTelemetryData( FR_FUEL, value ) ;
-//						}
-//					break ;
+					case A3_ID_8 :
+					{	
+						uint16_t ratio = g_model.frsky.channels[0].ratio3_4 ;
+						if ( ratio == 0 )
+						{
+							ratio = 330 ;
+						}
+						value = value * ratio / 33000 ;
+						storeTelemetryData( FR_A3, value ) ;
+					}
+					break ;
 
-//					case GPS_ALT_ID_8 :
-//						value = (int32_t)value / 10 ;
-//						storeTelemetryData( FR_SPORT_GALT, value ) ;
-//					break ;
-				 
-//	//				case GPS_LA_LO_ID_8 :
-//	//				{	
-//	////					Bits 31-30 00 = LAT min/10000 N
-//	////					Bits 31-30 01 = LAT min/10000 S
-//	////					Bits 31-30 10 = LON min/10000 E
-//	////					Bits 31-30 11 = LON min/10000 W
-//	//					uint32_t code = value >> 30 ;
-//	//					value &= 0x3FFFFFFF ;
-//	//					uint16_t bp ;
-//	//					uint16_t ap ;
-//	//					uint32_t temp ;
-//	//					temp = value / 10000 ;
-//	//					bp = (temp/ 60 * 100) + (temp % 60) ;
-//	//		      ap = value % 10000;
-//	//					if ( code & 2 )	// Long
-//	//					{
-//	//						storeTelemetryData( FR_GPS_LONG, bp ) ;
-//	//						storeTelemetryData( FR_GPS_LONGd, ap ) ;
-//	//						storeTelemetryData( FR_LONG_E_W, ( code & 1 ) ? 'W' : 'E' ) ;
-//	//					}
-//	//					else
-//	//					{
-//	//						storeTelemetryData( FR_GPS_LAT, bp ) ;
-//	//						storeTelemetryData( FR_GPS_LATd, ap ) ;
-//	//						storeTelemetryData( FR_LAT_N_S, ( code & 1 ) ? 'S' : 'N' ) ;
-//	//					}
-//	//				}
-//	//				break ;
-				
-//					case GPS_HDG_ID_8 :
-//						storeTelemetryData( FR_COURSE, value / 100 ) ;
-//					break ;
+					case A4_ID_8 :
+					{	
+						uint16_t ratio = g_model.frsky.channels[1].ratio3_4 ;
+						if ( ratio == 0 )
+						{
+							ratio = 330 ;
+						}
+						value = value * ratio / 33000 ;					
+						storeTelemetryData( FR_A4, value ) ;
+					}
+					break ;
 
-//					case GPS_SPEED_ID_8 :
-//						storeTelemetryData( FR_GPS_SPEED, value/1000 ) ;
-//					break ;
-
-//					case AIRSPEED_ID_8 :
-//						storeTelemetryData( FR_AIRSPEED, value ) ;
-//					break ;
-
-//	//				// Rbox Battx
-//	//				// 0xCCCCVVVV, C has 2dp, V has 3dp
-//	//				case RBOX_BATT1_ID_8 :
-//	//					storeTelemetryData( FR_RBOX_B1_V, (value & 0x0000FFFF)/10 ) ;	// To 2 dp
-//	//					storeTelemetryData( FR_RBOX_B1_A, value >> 16 ) ;
-//	//				break ;
-				
-//	//				case RBOX_BATT2_ID_8 :
-//	//					storeTelemetryData( FR_RBOX_B2_V, (value & 0x0000FFFF)/10 ) ;	// To 2 dp
-//	//					storeTelemetryData( FR_RBOX_B2_A, value >> 16 ) ;
-//	//				break ;
-
-//	//				// Rbox CNSP
-//	//				// 0xBBBBAAAA, AAAA batt 1 mAh, BBBB batt 2 mAh
-//	//				case RBOX_CNSP_ID_8 :
-//	//					storeTelemetryData( FR_RBOX_B1_CAP, value & 0x0000FFFF ) ;
-//	//					storeTelemetryData( FR_RBOX_B2_CAP, value >> 16 ) ;
-//	//				break ;
-
-//	//				// Rbox state
-//	//				// Bits 0-15 Set if channel overload
-//	//				// Bit 16 RX1IN overload
-//	//				// Bit 17 RX2IN overload
-//	//				// Bit 18 SBUS overload
-//	//				// bit19 RX1_FAILSAFE
-//	//				// Bit20 RX1_LOSTFRAME
-//	//				// Bit21 RX2_FAILSAFE
-//	//				// Bit22 RX2_LOSTFRAME
-//	//				// Bit23 RX1_PHYSICAL_CONNECTION _LOST
-//	//				// Bit24 RX2_PHYSICAL_CONNECTION _LOST
-//	//				// Bit25 RX1_NO_SIGNAL
-//	//				// Bit26 RX2_NO_SIGNAL
-//	//				case RBOX_STATE_ID_8 :
-//	//					storeTelemetryData( FR_RBOX_SERVO, value & 0x0000FFFF ) ;
-//	//					storeTelemetryData( FR_RBOX_STATE, (value >> 16) & 0x07FF ) ;
-//	//				break ;
-
-//					case S6R_ID_8 :
-//						S6Rdata.fieldIndex = packet[4] ;
-//						if ( (S6Rdata.fieldIndex >= 0x9E) && (S6Rdata.fieldIndex <= 0xA0) )
-//						{
-//							S6Rdata.value = ( packet[5] << 8 ) | packet[6] ;
-//						}
-//						else
-//						{
-//							S6Rdata.value = packet[5] ;
-//						}
-//						S6Rdata.valid = 1 ;
-//					break ;
-
-//					case ESC_POWER_ID_8 :
-//					// Low 16 bits volts 0.001 - 26.4
-//					// High 16 bits amps 0.01 - 30
-//						storeTelemetryData( FR_VOLTS, (value & 0x0000FFFF) / 10 ) ;
-//						storeTelemetryData( FR_CURRENT, (value >> 16) / 10 ) ;
-//					break ;
-
-//					case ESC_RPM_ID_8 :
-//					// Bit:0~15 RPM/1~65535RP
-//	//					uint16_t ERpm = Electrical Rpm /100 so 100 are 10000 Erpm
-//						storeTelemetryData( FR_RPM, (value & 0x0000FFFF) * 100 / 60 ) ;
-//						storeTelemetryData( FR_AMP_MAH, (uint32_t)(value >> 16) ) ;
-//					break ;
-
-//					case ESC_TEMPERATURE_ID_8 :
-//					// Bit:0-7 0.1Celsius/0~255
-//						storeTelemetryData( FR_TEMP2, value & 0x000000FF ) ;
-//					break ;
-
-//					case SBEC_POWER_ID_8 :
-//						storeTelemetryData( FR_SBEC_VOLT, (value & 0xffff) / 10 ) ;
-//						storeTelemetryData( FR_SBEC_CURRENT, (value >> 16) / 10 ) ;
-//					break ;
+					case T1_ID_8 :
+	//					if ( ( g_model.telemetryProtocol == TELEMETRY_ARDUCOPTER ) || ( g_model.telemetryProtocol == TELEMETRY_ARDUPLANE ) )
+	//					{
+	//						storeTelemetryData( FR_TEMP2, value ) ;
+	//					}
+	//					else
+						{
+							storeTelemetryData( FR_TEMP1, value ) ;
+						}
+					break ;
 			
-//					default :
-//						// Handle unknown ID
-//						handleUnknownId( (packet[3] << 8) | ( packet[2] ), value ) ;
-//					break ;
-//				}
-//			}
+					case T2_ID_8 :
+	//					if ( ( g_model.telemetryProtocol == TELEMETRY_ARDUCOPTER ) || ( g_model.telemetryProtocol == TELEMETRY_ARDUPLANE ) )
+	//					{
+	//						storeTelemetryData( FR_BASEMODE, value ) ;
+	//					}
+	//					else
+						{
+							storeTelemetryData( FR_TEMP2, value ) ;
+						}
+					break ;
+
+					case ACCX_ID_8 :
+						storeTelemetryData( FR_ACCX, value ) ;
+					break ;
+			
+					case ACCY_ID_8 :
+						storeTelemetryData( FR_ACCY, value ) ;
+					break ;
+		
+					case ACCZ_ID_8 :
+						storeTelemetryData( FR_ACCZ, value ) ;
+					break ;
+
+					case FUEL_ID_8 :
+	//					if ( ( g_model.telemetryProtocol == TELEMETRY_ARDUCOPTER ) || ( g_model.telemetryProtocol == TELEMETRY_ARDUPLANE ) )
+	//					{
+	//						storeTelemetryData( FR_TEMP1, value ) ;
+	//					}
+	//					else
+						{
+							storeTelemetryData( FR_FUEL, value ) ;
+						}
+					break ;
+
+					case GPS_ALT_ID_8 :
+						value = (int32_t)value / 10 ;
+						storeTelemetryData( FR_SPORT_GALT, value ) ;
+					break ;
+			 
+					case GPS_LA_LO_ID_8 :
+					{	
+	//					Bits 31-30 00 = LAT min/10000 N
+	//					Bits 31-30 01 = LAT min/10000 S
+	//					Bits 31-30 10 = LON min/10000 E
+	//					Bits 31-30 11 = LON min/10000 W
+						uint32_t code = value >> 30 ;
+						value &= 0x3FFFFFFF ;
+						uint16_t bp ;
+						uint16_t ap ;
+						uint32_t temp ;
+						temp = value / 10000 ;
+						bp = (temp/ 60 * 100) + (temp % 60) ;
+			      ap = value % 10000;
+						if ( code & 2 )	// Long
+						{
+							storeTelemetryData( FR_GPS_LONG, bp ) ;
+							storeTelemetryData( FR_GPS_LONGd, ap ) ;
+							storeTelemetryData( FR_LONG_E_W, ( code & 1 ) ? 'W' : 'E' ) ;
+						}
+						else
+						{
+							storeTelemetryData( FR_GPS_LAT, bp ) ;
+							storeTelemetryData( FR_GPS_LATd, ap ) ;
+							storeTelemetryData( FR_LAT_N_S, ( code & 1 ) ? 'S' : 'N' ) ;
+						}
+					}
+					break ;
+		
+				case GPS_HDG_ID_8 :
+					storeTelemetryData( FR_COURSE, value / 100 ) ;
+				break ;
+
+				case GPS_SPEED_ID_8 :
+					storeTelemetryData( FR_GPS_SPEED, value/1000 ) ;
+				break ;
+
+				case AIRSPEED_ID_8 :
+					storeTelemetryData( FR_AIRSPEED, value ) ;
+				break ;
+
+					// Rbox Battx
+					// 0xCCCCVVVV, C has 2dp, V has 3dp
+					case RBOX_BATT1_ID_8 :
+						storeTelemetryData( FR_RBOX_B1_V, (value & 0x0000FFFF)/10 ) ;	// To 2 dp
+						storeTelemetryData( FR_RBOX_B1_A, value >> 16 ) ;
+					break ;
+		
+					case RBOX_BATT2_ID_8 :
+						storeTelemetryData( FR_RBOX_B2_V, (value & 0x0000FFFF)/10 ) ;	// To 2 dp
+						storeTelemetryData( FR_RBOX_B2_A, value >> 16 ) ;
+					break ;
+
+					// Rbox CNSP
+					// 0xBBBBAAAA, AAAA batt 1 mAh, BBBB batt 2 mAh
+					case RBOX_CNSP_ID_8 :
+						storeTelemetryData( FR_RBOX_B1_CAP, value & 0x0000FFFF ) ;
+						storeTelemetryData( FR_RBOX_B2_CAP, value >> 16 ) ;
+					break ;
+
+					// Rbox state
+					// Bits 0-15 Set if channel overload
+					// Bit 16 RX1IN overload
+					// Bit 17 RX2IN overload
+					// Bit 18 SBUS overload
+					// bit19 RX1_FAILSAFE
+					// Bit20 RX1_LOSTFRAME
+					// Bit21 RX2_FAILSAFE
+					// Bit22 RX2_LOSTFRAME
+					// Bit23 RX1_PHYSICAL_CONNECTION _LOST
+					// Bit24 RX2_PHYSICAL_CONNECTION _LOST
+					// Bit25 RX1_NO_SIGNAL
+					// Bit26 RX2_NO_SIGNAL
+					case RBOX_STATE_ID_8 :
+						storeTelemetryData( FR_RBOX_SERVO, value & 0x0000FFFF ) ;
+						storeTelemetryData( FR_RBOX_STATE, (value >> 16) & 0x07FF ) ;
+					break ;
+
+					case S6R_ID_8 :
+						S6Rdata.fieldIndex = packet[4] ;
+						if ( (S6Rdata.fieldIndex >= 0x9E) && (S6Rdata.fieldIndex <= 0xA0) )
+						{
+							S6Rdata.value = ( packet[5] << 8 ) | packet[6] ;
+						}
+						else
+						{
+							S6Rdata.value = packet[5] ;
+						}
+						S6Rdata.valid = 1 ;
+					break ;
+
+					case ESC_POWER_ID_8 :
+					// Low 16 bits volts 0.001 - 26.4
+					// High 16 bits amps 0.01 - 30
+						storeTelemetryData( FR_VOLTS, (value & 0x0000FFFF) / 10 ) ;
+						storeTelemetryData( FR_CURRENT, (value >> 16) / 10 ) ;
+					break ;
+
+					case ESC_RPM_ID_8 :
+					// Bit:0~15 RPM/1~65535RP
+	//					uint16_t ERpm = Electrical Rpm /100 so 100 are 10000 Erpm
+						storeTelemetryData( FR_RPM, (value & 0x0000FFFF) * 100 / 60 ) ;
+						storeTelemetryData( FR_AMP_MAH, (uint32_t)(value >> 16) ) ;
+					break ;
+
+					case ESC_TEMPERATURE_ID_8 :
+					// Bit:0-7 0.1Celsius/0~255
+						storeTelemetryData( FR_TEMP2, value & 0x000000FF ) ;
+					break ;
+
+					case SBEC_POWER_ID_8 :
+						storeTelemetryData( FR_SBEC_VOLT, (value & 0xffff) / 10 ) ;
+						storeTelemetryData( FR_SBEC_CURRENT, (value >> 16) / 10 ) ;
+					break ;
+		
+					default :
+						// Handle unknown ID
+						handleUnknownId( (packet[3] << 8) | ( packet[2] ), value ) ;
+					break ;
+				}
+			}
 		 
 ////		 if ( ( (packet[3] & 0xF0) == 0x50 ) ) //|| ( (packet[3] & 0xF0) == 0x10 ) )
 ////		 {
@@ -799,7 +1104,7 @@ void processSportData( uint8_t *packet, uint32_t receiver )
 //			{
 //				handleUnknownId( (packet[3] << 8) | ( packet[2] ), value ) ;
 //			}
-//		}
+		}
 	}
 }
 

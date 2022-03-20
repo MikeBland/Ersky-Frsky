@@ -104,7 +104,10 @@ void buttons10ms()
   for( i = 0 ; i < NUM_BUTTONS ; i += 1 )
 	{
 		uint32_t value = data & (1<<i) ;
-    keys[i].input(value,(EnumKeys)i) ;
+		if ( i != KEY_ENTER )
+		{
+    	keys[i].input(value,(EnumKeys)i) ;
+		}
 	}
 	data = readTrims() ;
   for( i = 0 ; i < NUM_TRIMS ; i += 1 )

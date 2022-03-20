@@ -231,6 +231,9 @@ uint8_t IS_EXPO_THROTTLE( uint8_t x ) ;
 #define PXX_BIND			     0x01
 #define PXX_RANGE_CHECK		 0x20
 
+extern uint8_t InactivityMonitor ;
+extern uint32_t InacCounter ;
+
 //#define PROT_STR_LEN      6
 //#ifdef ASSAN
 //#define DSM2_STR "\011LP4/LP5  DSM2only DSM2/DSMX9XR-DSM  "
@@ -364,6 +367,8 @@ inline int16_t calc1000toRESX( register int32_t x)  // improve calc time by Pat 
 #define	ALERT_TYPE	0
 #define MESS_TYPE		1
 
+void resetTimern( uint32_t timer ) ;
+
 extern const char *AlertMessage ;
 extern uint8_t AlertType ;
 
@@ -380,6 +385,7 @@ extern void setTrimValue(uint8_t phase, uint8_t idx, int16_t trim) ;
 
 extern bool getSwitch00( int8_t swtch ) ;
 extern bool getSwitch(int8_t swtch, bool nc, uint8_t level = 0 ) ;
+extern int32_t getMovedSwitch( void ) ;
 
 extern int16_t g_ppmIns[] ;
 extern uint8_t ppmInState ; //0=unsync 1..8= wait for value i-1

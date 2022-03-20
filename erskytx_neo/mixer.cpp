@@ -110,6 +110,7 @@ int8_t phyStick[4] ;
 
 void runMixer( void ) ;
 void perOut(int16_t *chanOut, uint8_t att ) ;
+void store_telemetry_scaler( uint8_t index, int16_t value ) ;
 
 uint16_t isqrt32(uint32_t n)
 {
@@ -307,7 +308,7 @@ int16_t calc_scaler( uint8_t index, uint16_t *unit, uint8_t *num_decimals)
 	}
 	if ( pscaler->dest )
 	{
-//		store_telemetry_scaler( pscaler->dest, value ) ;
+		store_telemetry_scaler( pscaler->dest, value ) ;
 	}
 
 	return value ;

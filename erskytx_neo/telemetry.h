@@ -332,12 +332,12 @@ struct FrskyData
 	void setoffset();
 };
 
-//struct t_s6r
-//{
-//	uint8_t fieldIndex ;
-//	uint8_t valid ;
-//	int16_t value ;
-//} ;
+struct t_s6r
+{
+	uint8_t fieldIndex ;
+	uint8_t valid ;
+	int16_t value ;
+} ;
 
 struct t_elrsConfig
 {
@@ -362,6 +362,7 @@ void checkTelemetry( void ) ;
 extern uint8_t FrskyStreaming ;
 extern uint8_t SportStreamingStarted ;
 //uint8_t FrskyUsrStreaming = 0 ;
+extern FrskyData FrskyTelemetry[] ;
 
 extern int16_t AltOffset ;
 
