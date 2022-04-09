@@ -409,8 +409,8 @@ typedef struct te_FrSkyChannelData
 //  uint8_t   gain ;                // 
   uint16_t   ratio3_4 ;               // 0.0 means not used, 0.1V steps EG. 6.6 Volts = 66. 25.1V = 251, etc.
 //  uint8_t   unused_alarms_level ;
-  uint8_t   units3_4 ;      			// 0=volts, 1=raw, 2=volts*2, 3=Amps
-//  uint8_t   units ;               // 0=volts, 1=raw, 2=volts*2, 3=Amps
+  uint8_t   units:4 ;               // 0=volts, 1=raw, 2=volts*2, 3=Amps
+  uint8_t   units3_4:4 ;      			// 0=volts, 1=raw, 2=volts*2, 3=Amps
 } SKYFrSkyChannelData ;
 
 typedef struct te_FrSkyData

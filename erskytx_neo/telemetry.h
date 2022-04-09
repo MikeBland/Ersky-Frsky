@@ -138,7 +138,7 @@
 #define FR_SPORT_GALT	0xFE
 
 #define TELEMETRYDATALENGTH  (FR_TRASH+1)
-
+#define TELEMINMAXLEN	9
 
 #define RSSI_ID            0xf101
 #define ADC1_ID            0xf102
@@ -318,6 +318,11 @@
 
 #define DATA_FRAME         0x10
 
+#define TEL_ITEM_RESET_ALT		0
+#define TEL_ITEM_RESET_A1OFF	1
+#define TEL_ITEM_RESET_A2OFF	2
+#define TEL_ITEM_RESET_GPS		3
+#define TEL_ITEM_RESET_ALL		4
 
 struct FrskyData
 {
@@ -349,6 +354,11 @@ struct t_elrsConfig
 	uint8_t filled ;
 } ;
 
+struct t_tele_max_min
+{
+	int16_t teleMin[TELEMINMAXLEN] ;
+	int16_t teleMax[TELEMINMAXLEN] ;
+} ;
 
 
 extern struct t_s6r S6Rdata ;
@@ -368,6 +378,7 @@ extern int16_t AltOffset ;
 
 uint16_t A1A2toScaledValue( uint8_t channel, uint8_t *dplaces ) ;
 uint16_t convertRxv( uint16_t value ) ;
+void resetTelemetry( uint32_t item ) ;
 
 
 

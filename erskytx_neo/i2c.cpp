@@ -279,14 +279,14 @@ uint32_t readAws()
 
 	I2C0.command[0].val = 0 ;
 	I2C0.command[1].val = 0x00000902 ;
+	I2C0.fifo_data.val = ( AW2_ADDRESS << 1 ) ;
 	I2C0.command[2].val = 0x00000000 ;
 	I2C0.command[3].val = 0x00000901 ;
+	I2C0.fifo_data.val = 0 ;
 	I2C0.command[4].val = 0x00001401 ;
 	I2C0.command[5].val = 0x00001800 ;
 	I2C0.command[6].val = 0x80000000 ;
 
-	I2C0.fifo_data.val = ( AW2_ADDRESS << 1 ) ;
-	I2C0.fifo_data.val = 0 ;
 	I2C0.fifo_data.val = ( AW2_ADDRESS << 1 ) | 1 ;
 
 	I2C0.ctr.trans_start = 1 ;
@@ -299,10 +299,12 @@ uint32_t readAws()
 			return 0 ;
 		}
 	}
-	
-	I2C0.command[5].val = 0x00001800 ;
+
 	I2C0.fifo_data.val = ( AW2_ADDRESS << 1 ) ;
+	result = I2C0.fifo_data.val ;
 	I2C0.fifo_data.val = 1 ;
+ 
+	I2C0.command[5].val = 0x00001800 ;
 	I2C0.fifo_data.val = ( AW2_ADDRESS << 1 ) | 1 ;
 	
 	I2C0.ctr.trans_start = 1 ;
@@ -315,10 +317,19 @@ uint32_t readAws()
 			return 0 ;
 		}
 	}
-	
-	I2C0.command[5].val = 0x00001800 ;
+
+	result |= I2C0.fifo_data.val << 8 ;
+	 
+	I2C0.command[0].val = 0 ;
+	I2C0.command[1].val = 0x00000902 ;
 	I2C0.fifo_data.val = ( AW1_ADDRESS << 1 ) ;
+	I2C0.command[2].val = 0x00000000 ;
+	I2C0.command[3].val = 0x00000901 ;
 	I2C0.fifo_data.val = 0 ;
+	I2C0.command[4].val = 0x00001401 ;
+	I2C0.command[5].val = 0x00001800 ;
+	I2C0.command[6].val = 0x80000000 ;
+
 	I2C0.fifo_data.val = ( AW1_ADDRESS << 1 ) | 1 ;
 
 	I2C0.ctr.trans_start = 1 ;
@@ -332,74 +343,11 @@ uint32_t readAws()
 		}
 	}
 
-	result = I2C0.fifo_data.val ;
-	result |= I2C0.fifo_data.val << 8 ;
 	result |= I2C0.fifo_data.val << 16 ;
 
-	return result ;
+	result &= 0xFFFFF00F ;
+	return result | 0x80000000 ;
 }
-
-//uint32_t readAws()
-//{
-//	uint32_t result ;
-//	uint32_t i ;
-//	uint32_t save ;
-
-//	result = I2C0.fifo_data.val ;
-
-//	save = I2C0.int_ena.val ;
-//	I2C0.int_ena.val = 0 ;
-
-//  I2C0.fifo_conf.tx_fifo_empty_thrhd = 0;
-//  I2C0.fifo_conf.rx_fifo_full_thrhd  = 30;
-//  I2C0.fifo_conf.nonfifo_rx_thres    = 32;
-//  I2C0.fifo_conf.nonfifo_tx_thres    = 32;
-
-//	I2C0.command[0].val = 0 ;
-//	I2C0.command[1].val = 0x00000902 ;
-//	I2C0.command[2].val = 0x00000000 ;
-
-//	I2C0.command[3].val = 0x00000901 ;
-//	I2C0.command[4].val = 0x00001001 ;
-//	I2C0.command[5].val = 0x00001401 ;
-
-//	I2C0.command[6].val = 0x00000000 ;
-//	I2C0.command[7].val = 0x00000902 ;
-//	I2C0.command[8].val = 0x00000000 ;
-//	I2C0.command[9].val = 0x00000901 ;
-//	I2C0.command[10].val = 0x00001401 ;
-//	I2C0.command[11].val = 0x00001800 ;
-//	I2C0.command[12].val = 0x80000000 ;
-	 
-//	I2C0.fifo_data.val = ( AW2_ADDRESS << 1 ) ;
-//	I2C0.fifo_data.val = 0 ;
-//	I2C0.fifo_data.val = ( AW2_ADDRESS << 1 ) | 1 ;
-//	I2C0.fifo_data.val = ( AW1_ADDRESS << 1 ) ;
-//	I2C0.fifo_data.val = 0 ;
-//	I2C0.fifo_data.val = ( AW1_ADDRESS << 1 ) | 1 ;
-
-//	I2C0.ctr.trans_start = 1 ;
-//	i = 0 ;
-//	while ( ( I2C0.command[11].val & 0x80000000 ) == 0 )
-//	{
-//		// wait
-//		if ( ++i > 500000 )
-//		{
-//			return 0 ;
-//		}
-//	}
-
-//	result = I2C0.fifo_data.val ;
-//	result |= I2C0.fifo_data.val << 24 ;
-//	result |= I2C0.fifo_data.val << 16 ;
-
-//	result |= readI2CByte( AW2_ADDRESS, 1 ) << 8 ;
-
-//	I2C0.int_ena.val = save ;
-
-//	return result ;
-//}
-
 
 static uint32_t fromBCD( uint8_t bcd_value )
 {

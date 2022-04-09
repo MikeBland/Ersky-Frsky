@@ -188,6 +188,7 @@ int16_t WholeGpsAltitude ;
 int16_t AltOffset ;
 
 uint8_t FrskyBattCells[2] = {0,0} ;
+int16_t Frsky_Amp_hour_prescale ;
 uint8_t SbecCount ;
 uint16_t SbecAverage ;
 
@@ -195,6 +196,7 @@ uint16_t XjtVersion ;
 uint8_t VfasVoltageTimer ;
 
 int16_t TelemetryData[TELEMETRYDATALENGTH] ;  // All 38 words
+struct t_tele_max_min TelemetryMaxMin ;
 uint8_t TelemetryDataValid[TELEMETRYDATALENGTH] ;  // All 38 words
 
 static uint8_t A1Received = 0 ;
@@ -368,6 +370,21 @@ void storeTelemetryData( uint8_t index, uint16_t value )
 			TelemetryDataValid[index] = 25 + g_model.telemetryTimeout ;
 		}
 
+
+		if ( index < TELEMINMAXLEN )
+		{
+			struct t_tele_max_min *maxMinPtr = &TelemetryMaxMin ;
+			
+			int16_t value = TelemetryData[index] ;
+			if ( maxMinPtr->teleMax[index] < value )
+			{	maxMinPtr->teleMax[index] = value ;
+			}
+			int16_t min = maxMinPtr->teleMin[index] ;
+			if (!min || min > value)
+   	  { maxMinPtr->teleMin[index] = value ;
+			}	
+		}
+		
 		if ( index == FR_CELL_V )			// Cell Voltage
 		{
 			// It appears the cell voltage bytes are in the wrong order
@@ -1108,6 +1125,12 @@ void processSportData( uint8_t *packet, uint32_t receiver )
 	}
 }
 
+void FrskyData::setoffset()
+{
+	offset = raw ;
+	value = 0 ;
+}
+
 void FrskyData::set(uint8_t value, uint8_t copy)
 {
 	uint8_t x ;
@@ -1135,6 +1158,11 @@ void FrskyData::set(uint8_t value, uint8_t copy)
 
 		storeTelemetryData( copy, this->value ) ;
 		averaging_total = 0 ;
+	}
+	if ( averageCount == count/2 )
+	{
+		// re-trigger timeout for access
+		storeTelemetryData( copy, this->value ) ;
 	}
 }
 
@@ -1454,4 +1482,42 @@ extern uint16_t TelRxCount ;
 	NumPktBytes = numbytes ;
 }
 
+void resetTelemetry( uint32_t item )
+{
+	switch ( item )
+	{
+		case TEL_ITEM_RESET_ALT :
+      AltOffset = -TelemetryData[FR_ALT_BARO] ;
+		break ;
+
+		case TEL_ITEM_RESET_A1OFF :
+			FrskyTelemetry[0].setoffset() ;
+		break ;
+
+		case TEL_ITEM_RESET_A2OFF :
+			FrskyTelemetry[1].setoffset() ;
+		break ;
+
+		case TEL_ITEM_RESET_GPS :
+		{	
+			struct t_tele_max_min *maxMinPtr = &TelemetryMaxMin ;
+
+			maxMinPtr->teleMax[FR_GPS_SPEED] = 0 ;
+			maxMinPtr->teleMax[TELEM_GPS_ALT] = 0 ;
+		}
+		break ;
+
+		case TEL_ITEM_RESET_ALL :
+//			FrskyHubData[FR_A1_MAH] = 0 ;
+//			FrskyHubData[FR_A2_MAH] = 0 ;
+			TelemetryData[FR_CELL_MIN] = 450 ;			// 0 volts
+			Frsky_Amp_hour_prescale = 0 ;
+			TelemetryData[FR_AMP_MAH] = 0 ;
+  		memset( &TelemetryMaxMin, 0, sizeof(TelemetryMaxMin));
+			TelemetryMaxMin.teleMax[FR_ALT_BARO] = 0 ;
+//			PixHawkCapacity = 0 ;
+		break ;
+	}
+
+}
 

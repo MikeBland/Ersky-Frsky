@@ -103,11 +103,6 @@ extern uint8_t SystemOptions ;
 #define HSW_FM5					105
 #define HSW_FM6					106
 
-#define NUM_MIX_PHY_SWITCHES	4
-
-#define MIX_GVAR (PPM_BASE+NUM_PPM+NUM_SKYCHNOUT+NUM_MIX_PHY_SWITCHES+NUM_SKYCSW)
-
-
 #define MAX_SKYDRSWITCH 34
 
 //(1+4+1+NUM_SKYCSW+8)
@@ -142,6 +137,17 @@ uint8_t IS_EXPO_THROTTLE( uint8_t x ) ;
 #define NUM_TELEM_ITEMS 82
 #define NUM_SKYXCHNRAW (CHOUT_BASE+NUM_SKYCHNOUT) // NUMCH + P1P2P3+ AIL/RUD/ELE/THR + MAX/FULL + CYC1/CYC2/CYC3
 
+#define MIXSRC_RUD   1
+#define MIXSRC_ELE   2
+#define MIXSRC_THR   3
+#define MIXSRC_AIL   4
+
+#define MIXSRC_MAX   10
+#define MIXSRC_FULL  11
+#define MIXSRC_CYC1  12
+#define MIXSRC_CYC2  13
+#define MIXSRC_CYC3  14
+
 #define MIX_MAX   10
 #define MIX_FULL  11 
 #define MIX_CYC1  12
@@ -153,6 +159,12 @@ uint8_t IS_EXPO_THROTTLE( uint8_t x ) ;
 #define PPM_BASE    MIX_CYC3
 #define CHOUT_BASE  (PPM_BASE+NUM_PPM)
 #define PHY_BASE	  (CHOUT_BASE+NUM_SKYCHNOUT)
+
+#define NUM_MIX_PHY_SWITCHES	4
+#define NUM_MIX_MISSING_SWITCHES	5
+
+#define MIX_GVAR (PPM_BASE+NUM_PPM+NUM_SKYCHNOUT+NUM_MIX_PHY_SWITCHES+NUM_SKYCSW+NUM_MIX_MISSING_SWITCHES)
+#define MIX_TRIMS_START ( MIX_GVAR + MAX_GVARS + 1 + NUM_SCALERS )
 
 #define CURVE_BASE 7
 
@@ -195,18 +207,6 @@ uint8_t IS_EXPO_THROTTLE( uint8_t x ) ;
 #define SWASH_TYPE_140   3
 #define SWASH_TYPE_90    4
 #define SWASH_TYPE_NUM   4
-
-#define MIXSRC_RUD   1
-#define MIXSRC_ELE   2
-#define MIXSRC_THR   3
-#define MIXSRC_AIL   4
-
-
-#define MIXSRC_MAX   10
-#define MIXSRC_FULL  11
-#define MIXSRC_CYC1  12
-#define MIXSRC_CYC2  13
-#define MIXSRC_CYC3  14
 
 #define INTERNAL_MODULE 0
 #define EXTERNAL_MODULE 1
@@ -366,6 +366,8 @@ inline int16_t calc1000toRESX( register int32_t x)  // improve calc time by Pat 
 
 #define	ALERT_TYPE	0
 #define MESS_TYPE		1
+
+extern volatile uint8_t MixTick10ms ;
 
 void resetTimern( uint32_t timer ) ;
 

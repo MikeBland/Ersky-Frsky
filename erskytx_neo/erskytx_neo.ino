@@ -74,6 +74,9 @@
 #define AW2_ADDRESS		0x59
 #define RTC_ADDRESS		0x51
 
+#define RSSI_POWER_OFF	1
+#define RSSI_STAY_ON		0
+
 uint32_t readAws() ;
 void initI2C() ;
 void setI2C400kHz() ;
@@ -147,6 +150,7 @@ uint8_t Aw2LowRequired ;
 uint16_t g_LightOffCounter ;
 
 uint8_t JustLoadedModel ;
+uint32_t checkRssi(uint8_t event) ;
 //uint8_t ModelWarningsActive ;
 
 const uint8_t bchout_ar[] = {
@@ -835,7 +839,6 @@ void IRAM_ATTR heartbeatHandler()
 uint32_t SpiffsBegun ;
 //uint32_t FileSize ;
 
-
 void setup(void)
 {
 	uint32_t pinFunction ;
@@ -850,6 +853,8 @@ void setup(void)
 //	XTOS_RESTORE_JUST_INTLEVEL(intlev) ;
 
   Wire.begin(-1,-1,400000) ;
+
+//  aw_init() ;
 
 	writeI2CByte( AW2_ADDRESS, 0x7F, 0 ) ;	// Reset Aw
 	writeI2CByte( AW1_ADDRESS, 0x7F, 0 ) ;	// Reset Aw
@@ -1040,9 +1045,6 @@ extern void voice_task(void* pdata) ;
 
 	SpiffsBegun = result ;
 
-//	Serial1.println( "Hello World" ) ;
-
-
 //	lcd_putcAtt( 12, 0, 'C', 0 ) ;
 //	refreshDisplay() ;
 
@@ -1057,6 +1059,18 @@ extern void voice_task(void* pdata) ;
 	clearDisplay() ;
 	lcd_putsAtt( 3*FW, 3*FH, "SETUP", DBLSIZE ) ;
 	refreshDisplay() ;
+}
+
+void speakModelVoice()
+{
+	if ( g_model.modelVoice == -1 )
+	{
+		putNamedVoiceQueue( g_model.modelVname, VLOC_MNAMES ) ;
+	}
+//	else
+//	{
+//		putVoiceQueue( ( g_model.modelVoice + 260 ) | VLOC_NUMUSER  ) ;
+//	}
 }
 
 void refreshDisplay()
@@ -1756,7 +1770,7 @@ uint32_t powerStartup()
 }	
 
 
-uint32_t testPowerOff()
+uint32_t testPowerOff( uint8_t event )
 {
  	static uint16_t tgtime = 0 ;
 
@@ -1776,7 +1790,10 @@ uint32_t testPowerOff()
 				dtimer = ( 80 - dtimer ) * 100 / 80 ;
 				if ( (uint16_t)(Tenms - tgtime ) > 80 )
 				{
-					powerIsOn = 3 ;
+					if ( checkRssi( event ) == RSSI_POWER_OFF )
+					{
+						powerIsOn = 3 ;
+					}
 				}
 				else
 				{
@@ -2476,7 +2493,7 @@ uint32_t AwBits ;
 uint32_t TenMsFlag ;
 uint32_t Cleared ;
 
-uint16_t AwTime ;
+//uint16_t AwTime ;
 
 uint8_t throttleReversed()
 {
@@ -2498,7 +2515,7 @@ bool getSwitch(int8_t swtch, bool nc, uint8_t level)
  	SwitchStack[level] = aswitch ;
 	
 //	cs_index = aswitch-(MAX_SKYDRSWITCH-NUM_SKYCSW);
-	cs_index = aswitch-(CSW_INDEX+1) ;
+	cs_index = aswitch-(CSW_INDEX) ;
 
 	{
 		int32_t index ;
@@ -2713,17 +2730,34 @@ static uint8_t checkTrim(uint8_t event)
   	  uint8_t idx = k/2;
 		
 	// SORT idx for stickmode if FIX_MODE on
-			idx = stickScramble[g_eeGeneral.stickMode*4+idx] ;
-			uint8_t ct = g_eeGeneral.crosstrim + ( g_eeGeneral.xcrosstrim << 1 ) ;
-			if ( ct )
-			{
-				idx = 3 - idx ;			
-			}
-      if ( ct == 2 ) // Vintage style crosstrim
-      {
-        if (idx == 0 || idx == 3)       // swap back LH/RH trims
-          idx = 3 - idx;
-      }
+//			idx = stickScramble[g_eeGeneral.stickMode*4+idx] ;
+
+	// Now sort for the stick mode
+	// Mode 1 RETA  Swap 1 and 2 from no swap
+	// Mode 2 RTEA  No swap from Swap 1 and 2 
+	// Mode 3 AETR  Swap 1 and 2, and 0 and 3 from Swap 0 and 3
+	// Mode 4 ATER  Swap 0 and 3 from Swap 1 and 2, and 0 and 3
+
+	// So modes 1,2 swap 1 and 2
+	//    modes 3,4 swap 1 and 2
+
+//  	  uint8_t t = g_eeGeneral.stickMode ^ 1 ;
+//			idx = stickScramble[t*4+idx] ;
+
+			// This line does the required operation
+			idx = stickScramble[1*4+idx] ;
+			
+// Crosstrim not useful due to the hardware trim switches
+//			uint8_t ct = g_eeGeneral.crosstrim + ( g_eeGeneral.xcrosstrim << 1 ) ;
+//			if ( ct )
+//			{
+//				idx = 3 - idx ;			
+//			}
+//      if ( ct == 2 ) // Vintage style crosstrim
+//      {
+//        if (idx == 0 || idx == 3)       // swap back LH/RH trims
+//          idx = 3 - idx;
+//      }
 			
 //			if ( TrimInUse[idx] )
 			{
@@ -2794,11 +2828,31 @@ void doTenms()
 {
 	uint16_t m ;
 	int16_t byte ;
+	uint32_t localAwBits ;
+	uint32_t localAwBits2 ;
 
 //	AwBits = ( readAw1Reg(0) << 16 ) | t ;
-	m = micros() ;
-	AwBits = readAws() ;
-	AwTime = micros() - m ;
+//	m = micros() ;
+	localAwBits = readAws() ;
+
+extern void txmit( uint8_t c ) ;
+extern void crlf() ;
+extern void p8hex( uint32_t value ) ;
+
+	if ( (localAwBits & 0x7FFFFFFF) != AwBits )
+	{
+		localAwBits2 = readAws() ;
+		if ( localAwBits != localAwBits2 )
+		{
+			localAwBits = 0 ;
+		}
+	}
+
+	if ( localAwBits )	// If read OK
+	{
+		AwBits = localAwBits & 0x7FFFFFFF ;	// Update
+	}
+//	AwTime = micros() - m ;
 	buttons10ms() ;
 	checkAw1() ;
 	checkAw2() ;	// Send request to external logic
@@ -3015,7 +3069,7 @@ void alertMessages( const char * s, const char * t )
   lcd_putsAtt(64-5*FW,0*FH,PSTR(STR_ALERT),DBLSIZE);
   lcd_puts_P(0,4*FH,s);
   lcd_puts_P(0,5*FH,t);
-	lcd_puts_P(0, 6*FH, " Press EXIT to skip" ) ; // PSTR(STR_PRESS_KEY_SKIP) ) ;
+	lcd_puts_P(0, 6*FH, PSTR(STR_PRESS_KEY_SKIP) ) ;
 }
 
 uint8_t checkThrottlePosition()
@@ -3048,6 +3102,15 @@ int32_t readControl( uint8_t channel )
 	return value ;
 }
 
+
+void endModelChecks()
+{
+	JustLoadedModel = 0 ;
+	popMenu( 0 ) ;
+	speakModelVoice() ;
+}
+
+
 void checkCustom( uint8_t event )
 {
 	CustomCheckData *pdata ;
@@ -3058,8 +3121,7 @@ void checkCustom( uint8_t event )
 
 	if ( pdata->source == 0 )
 	{
-		JustLoadedModel = 0 ;
-		popMenu( 0 ) ;
+		endModelChecks() ;
 		return ;
 	}
 //	if ( idx < 4 )
@@ -3074,8 +3136,7 @@ void checkCustom( uint8_t event )
 	value = readControl( idx ) ;
 	if ( ( value >= pdata->min ) && ( value <= pdata->max ) )
 	{
-		JustLoadedModel = 0 ;
-		popMenu( 0 ) ;
+		endModelChecks() ;
 		return ;
 	}
 
@@ -3093,8 +3154,7 @@ void checkCustom( uint8_t event )
 	{
 		if ( ++timer > 19 )
 		{
-			JustLoadedModel = 0 ;
-			popMenu( 0 ) ;
+			endModelChecks() ;
 			return ;
 		}
 	}
@@ -3110,8 +3170,7 @@ void checkCustom( uint8_t event )
 
 	if ( event == EVT_KEY_BREAK(KEY_EXIT) )
 	{
-		JustLoadedModel = 0 ;
-		popMenu( 0 ) ;
+		endModelChecks() ;
 		return ;
 	}	 
 }
@@ -3201,7 +3260,7 @@ void checkThrottle( uint8_t event )
   lcd_putsAtt(36, 2*FH, PSTR(STR_WARNING),DBLSIZE|CONDENSED) ;
 	lcd_puts_P(0, 5*FH, PSTR(STR_THR_NOT_IDLE) ) ;
 	lcd_puts_P(0, 6*FH, PSTR(STR_RST_THROTTLE) ) ;
-	lcd_puts_P(0, 7*FH, " Press EXIT to skip" ) ; // PSTR(STR_PRESS_KEY_SKIP) ) ;
+	lcd_puts_P(0, 7*FH, PSTR(STR_PRESS_KEY_SKIP) ) ;
 	
 	if ( event == EVT_KEY_BREAK(KEY_EXIT) )
 	{
@@ -3229,6 +3288,7 @@ void loop(void)
 		}
 		TenMsFlag = 1 ;
 		Tenms += 1 ;
+		MixTick10ms = 1 ;
 	}
 
 //	time = millis() ;
@@ -3363,8 +3423,14 @@ void loop(void)
 		{
 			uint32_t stopping ;
 			PreScale = 0 ;
-			stopping = ( PowerStart == 0 ) ? 0 : testPowerOff() ;
+			event = peekEvent() ;
+			stopping = ( PowerStart == 0 ) ? 0 : testPowerOff( event ) ;
 			
+			if ( stopping )
+			{
+				event = getEvent() ;
+			}
+
 			if ( PoweringOff )
 			{
 //				PowerSwitchTime = DWT->CYCCNT ;
@@ -3390,7 +3456,6 @@ void loop(void)
 				}
 				return ;
 			}
-
 
 			if ( stopping == 0 )
 			{
@@ -3494,11 +3559,18 @@ extern uint32_t TotalExecTime ;
 		  	else
 #endif
 				{
-					ScriptActive = 0 ;
-					g_menuStack[g_menuStackPtr](event) ;
+//					if ( ! PoweringOff )
+//					{
+						ScriptActive = 0 ;
+						g_menuStack[g_menuStackPtr](event) ;
 #if defined(LUA) || defined(BASIC)
-					refreshNeeded = 4 ;
+						refreshNeeded = 4 ;
 #endif
+//					}
+//					else
+//					{
+//						refreshNeeded = 2 ;
+//					}
 				}
 #if defined(LUA) || defined(BASIC)
 				if ( ( refreshNeeded == 2 ) || ( ( refreshNeeded == 4 ) ) )
@@ -3630,9 +3702,9 @@ void timer(int16_t throttle_val)
 		tmb = g_model.timer[timer].timerRstSw ;
 		if ( tmb )
 		{
-    	if(tmb>(HSW_MAX))	 // toggeled switch
+    	if(tmb>=(256))	 // toggeled switch
 			{
-    	  uint8_t swPos = getSwitch00( tmb-(HSW_MAX) ) ;
+    	  uint8_t swPos = getSwitch00( tmb-(256) ) ;
 				if ( swPos != ptimer->lastResetSwPos )
 				{
 					ptimer->lastResetSwPos = swPos ;
@@ -3666,10 +3738,10 @@ void timer(int16_t throttle_val)
 		
 		tma = g_model.timer[timer].tmrModeA ;
     tmb = g_model.timer[timer].tmrModeB ;
-		if ( tmb < -HSW_MAX )
-		{
-			tmb += 256 ;
-		}
+//		if ( tmb < -HSW_MAX )
+//		{
+//			tmb += 256 ;
+//		}
 
 // code for cx%
 		val = throttle_val ;
@@ -3682,10 +3754,14 @@ void timer(int16_t throttle_val)
 
 		if ( tma != TMRMODE_NONE )		// Timer is not off
 		{ // We have a triggerA so timer is running 
-    	if(tmb>(HSW_MAX))	 // toggeled switch
+    	if(tmb>=256)	 // toggeled switch
 			{
     	  if(!(ptimer->sw_toggled | ptimer->s_sum | s_cnt | s_time | ptimer->lastSwPos)) ptimer->lastSwPos = 0 ;  // if initializing then init the lastSwPos
-    	  uint8_t swPos = getSwitch00( tmb-(HSW_MAX) ) ;
+    	  uint8_t swPos = getSwitch00( tmb-(256) ) ;
+//				char xxxx[2] ;
+//				xxxx[1] = 0 ;
+//				xxxx[0] = swPos + '0' ;
+//				Serial.print(xxxx) ;
     	  if(swPos && !ptimer->lastSwPos)  ptimer->sw_toggled = !ptimer->sw_toggled;  //if switch is flipped first time -> change counter state
     	  ptimer->lastSwPos = swPos;
     	}

@@ -293,34 +293,36 @@ extern uint32_t AwBits ;
 
 	if ( ( key >= HSW_Etrmdn ) && ( key <= HSW_Ttrmup ) )
 	{
-		uint8_t ct = g_eeGeneral.crosstrim + ( g_eeGeneral.xcrosstrim << 1 ) ;
-		key -= HSW_Etrmdn ;		// 0 - 7
-		if (key >= 2 && key <= 5)       // swap back LH/RH trims
-		{
-			if ( g_eeGeneral.stickMode & 2 )
-			{
-				key ^= 0x06 ;
-			}
-		}
-		else
-		{
-			if ( g_eeGeneral.stickMode & 1 )
-			{
-				key ^= 0x06 ;
-			}
-		}
-		if ( ct )
-		{
-			key ^= 0x06 ;
-	 		if ( ct == 2 ) // Vintage style crosstrim
-			{
-	 			if (key >= 2 && key <= 5)       // swap back LH/RH trims
-				{
-					key ^= 0x06 ;
-				}
-			}
-		}
-		key += HSW_Etrmdn ;		// 0 - 7
+		// Crosstrim not useful on this hardware
+
+//		uint8_t ct = g_eeGeneral.crosstrim + ( g_eeGeneral.xcrosstrim << 1 ) ;
+//		key -= HSW_Etrmdn ;		// 0 - 7
+//		if (key >= 2 && key <= 5)       // swap back LH/RH trims
+//		{
+//			if ( g_eeGeneral.stickMode & 2 )
+//			{
+//				key ^= 0x06 ;
+//			}
+//		}
+//		else
+//		{
+//			if ( g_eeGeneral.stickMode & 1 )
+//			{
+//				key ^= 0x06 ;
+//			}
+//		}
+//		if ( ct )
+//		{
+//			key ^= 0x06 ;
+//	 		if ( ct == 2 ) // Vintage style crosstrim
+//			{
+//	 			if (key >= 2 && key <= 5)       // swap back LH/RH trims
+//				{
+//					key ^= 0x06 ;
+//				}
+//			}
+//		}
+//		key += HSW_Etrmdn ;		// 0 - 7
 	}
 
   switch ( key )

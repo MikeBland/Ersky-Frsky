@@ -922,9 +922,9 @@ void perOut(int16_t *chanOut, uint8_t att )
       { // switch on?  if no switch selected => on
         swTog = swon ;
         swOn[i] = swon = false ;
-        if (k == MIX_GVAR+MAX_GVARS+1)
+        if (k == MIX_GVAR+MAX_GVARS+1)	// "THIS"
 				{
-					act[i] = chans[md->destCh-1] * DEL_MULT / 100 ;	// "THIS"
+					act[i] = chans[md->destCh-1] * DEL_MULT / 100 ;
 				}
         if( k !=MIX_MAX && k !=MIX_FULL)
 				{
@@ -949,15 +949,15 @@ void perOut(int16_t *chanOut, uint8_t att )
 				{
 					if ( md->disableExpoDr )
 					{
- 		      	v = RawSticks[k]; //Switch is on. MAX=FULL=512 or value.
+ 		      	v = RawSticks[k] ;
 					}
 				}
-				if ( ( k >= PHY_BASE ) && ( k < PHY_BASE + NUM_MIX_PHY_SWITCHES + NUM_SKYCSW ) )
+				if ( ( k >= PHY_BASE ) && ( k < PHY_BASE + NUM_MIX_PHY_SWITCHES + NUM_SKYCSW + NUM_MIX_MISSING_SWITCHES ) )
 				{
 					uint32_t index = k - PHY_BASE ;
 					if ( index >= NUM_MIX_PHY_SWITCHES )
 					{
-						v = getSwitch( CSW_INDEX + index - NUM_MIX_PHY_SWITCHES, 0, 0 ) ;
+						v = getSwitch( CSW_INDEX + index - NUM_MIX_PHY_SWITCHES - NUM_MIX_MISSING_SWITCHES, 0, 0 ) ;
 						v = v ? 1024 : -1024 ;
 					}
 					else
@@ -1008,7 +1008,19 @@ void perOut(int16_t *chanOut, uint8_t att )
 				{
 					 v = calc_scaler( k - (MIX_GVAR+MAX_GVARS+1), 0, 0 ) ;
         }
+				if ( k > MIX_TRIMS_START )
+				{
+					// Trim source
+					if(k <= MIX_TRIMS_START + 4 )
+					{
+						uint32_t t = k - MIX_TRIMS_START ;
+						v = trimA[t] ;
+						TrimInUse[t] |= 1 ;
+					}
+				}
 				
+				
+				 
 				if(md->mixWarn) mixWarning |= 1<<(md->mixWarn-1); // Mix warning
 
 			}

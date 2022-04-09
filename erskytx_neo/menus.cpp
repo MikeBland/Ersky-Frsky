@@ -52,6 +52,9 @@ extern lfs_t Lfs ;
 #define BASIC		1
 #include "basic.h"
 
+#define RSSI_POWER_OFF	1
+#define RSSI_STAY_ON		0
+
 struct t_text	TextControl ;
 extern struct t_alpha Alpha ;
 extern struct fileControl FileControl ;
@@ -1060,28 +1063,28 @@ void actionMainPopup( uint8_t event )
 			TextControl.TextHelp = 0 ;
 	  	pushMenu(menuText) ;
 		}
-//		else if( popidx == 6 )	// Zero Alt.
-//		{
-////			resetTelemetry( TEL_ITEM_RESET_ALT ) ;
-//		}
-//		else if( popidx == 7 )	// A1 Offset
-//		{
-////      if ( g_model.frsky.channels[0].units == 3 )		// Current (A)
-////			{
-////				resetTelemetry( TEL_ITEM_RESET_A1OFF ) ;
-////			}
-//		}
-//		else if( popidx == 8 )	// A2 Offset
-//		{
-////      if ( g_model.frsky.channels[1].units == 3 )		// Current (A)
-////			{
-////				resetTelemetry( TEL_ITEM_RESET_A2OFF ) ;
-////			}
-//		}
-//		else if( popidx == 9 )	// GPS reset
-//		{
-////				resetTelemetry( TEL_ITEM_RESET_GPS ) ;
-//		}
+		else if( popidx == 6 )	// Zero Alt.
+		{
+			resetTelemetry( TEL_ITEM_RESET_ALT ) ;
+		}
+		else if( popidx == 7 )	// A1 Offset
+		{
+      if ( g_model.frsky.channels[0].units == 3 )		// Current (A)
+			{
+				resetTelemetry( TEL_ITEM_RESET_A1OFF ) ;
+			}
+		}
+		else if( popidx == 8 )	// A2 Offset
+		{
+      if ( g_model.frsky.channels[1].units == 3 )		// Current (A)
+			{
+				resetTelemetry( TEL_ITEM_RESET_A2OFF ) ;
+			}
+		}
+		else if( popidx == 9 )	// GPS reset
+		{
+			resetTelemetry( TEL_ITEM_RESET_GPS ) ;
+		}
 //		else if( popidx == 10 )	// Help
 //		{
 ////			SharedMemory.TextControl.TextHelp = 1 ;
@@ -1097,10 +1100,10 @@ void actionMainPopup( uint8_t event )
 //			RotaryState = ROTARY_MENU_UD ;
 	  	pushMenu(menuScript) ;
 		}
-//		else if( popidx == 13 )	// Reset Telemetry
-//		{
-////      resetTelemetry( TEL_ITEM_RESET_ALL ) ;
-//		}
+		else if( popidx == 13 )	// Reset Telemetry
+		{
+      resetTelemetry( TEL_ITEM_RESET_ALL ) ;
+		}
 		else if( ( popidx == 14 )	|| ( popidx == 15 ) )// Reset Telemetry
 		{
       resetTimern( popidx - 14 ) ;
@@ -1153,8 +1156,8 @@ void displayCustomPage( uint32_t page )
 {
 	lcd_putsnAtt(0, 0, g_model.name, sizeof(g_model.name), INVERS) ;
 extern uint16_t g_vbat10mV ;
-  uint8_t att = g_vbat10mV < g_eeGeneral.vBatWarn ? BLINK : 0;
-	putsVolts( 14*FW, 0, g_vbat10mV, att) ;
+  uint8_t att = g_vbat10mV/10 < g_eeGeneral.vBatWarn ? BLINK : 0;
+	putsVolts( 14*FW, 0, g_vbat10mV/10, att) ;
 	displayTimer( 18*FW+5, 0, 0, 0 ) ;
 	
   for (uint32_t i = 0 ; i < 6 ; i += 1 )
@@ -1180,7 +1183,7 @@ extern uint16_t g_vbat10mV ;
 	}
 
 	lcd_puts_Pleft( 7*FH, "RSSI" ) ;
-	lcd_hbar( 30, 57, 43, 6, TelemetryData[FR_RXRSI_COPY] ) ;
+	lcd_hbar( 30, 57, 43, 6, get_telemetry_value(TEL_ITEM_RSSI) ) ;
 	lcd_vline( 63, 8, 48 ) ;
 }
 
@@ -1317,10 +1320,87 @@ extern void displayTrims() ;
 	 
 }
 
+uint16_t SelectNewModel ;
+
+uint32_t checkRssi(uint8_t event)
+{
+  if(g_eeGeneral.disableRxCheck)
+	{
+		return RSSI_POWER_OFF ;
+	}
+	if ( get_telemetry_value(TEL_ITEM_RSSI) == 0 )
+	{
+		return RSSI_POWER_OFF ;
+	}
+
+	if ( event == EVT_KEY_BREAK(KEY_EXIT) )
+	{
+		return RSSI_POWER_OFF ;
+	}
+
+// Now display warning
+	clearDisplay() ;
+extern uint8_t HandImage[] ;
+	lcd_img( 1, 0, HandImage,0,0 ) ;
+  lcd_putsAtt(36, 0*FH,XPSTR("Receiver"),DBLSIZE|CONDENSED) ;
+  lcd_putsAtt(36, 2*FH,PSTR(STR_WARNING),DBLSIZE|CONDENSED) ;
+	lcd_puts_P(0 ,5*FH, XPSTR("Rx still powered") ) ;
+	lcd_puts_P(0 ,7*FH, PSTR(STR_PRESS_KEY_SKIP) ) ;
+	refreshDisplay() ;
+
+	return RSSI_STAY_ON ;
+}
+
+static uint8_t NewModel ;
+
 void menuModelSelect(uint8_t event)
 {
   static uint8_t sel_editMode ;
   static MState2 mstate2 ;
+	if ( SelectNewModel )
+	{
+		if ( checkRssi( event ) == RSSI_POWER_OFF )
+		{
+			// Now can change models
+//			stopMusic() ;
+			WatchdogTimeout = 300 ;		// 3 seconds
+//				stopMusic() ;
+			eeDirty(EE_MODEL) ;
+			ee32WaitFinished() ;
+			
+			NewModel = SelectNewModel & 0x00FF ;
+			g_eeGeneral.currModel = NewModel ;
+//			pausePulses() ;
+			
+			ee32LoadModel(g_eeGeneral.currModel) ; //load default values
+			xSemaphoreGive( SpiMutex ) ;
+			JustLoadedModel = 2 ;
+			VoiceCheckFlag100mS |= 2 ;// Set switch current states
+			processSwitches() ;	// Guarantee unused switches are cleared
+//			telemetry_init( decodeTelemetryType( g_model.telemetryProtocol ) ) ;
+////#ifdef LUA
+////				luaLoadModelScripts() ;
+////#endif
+////#ifdef BASIC
+////				basicLoadModelScripts() ;
+////#endif
+			eeDirty(EE_GENERAL) ;			
+			
+			if ( ( SelectNewModel >> 8 ) == 2 )
+			{
+				chainMenu(menuModelIndex) ;
+			}
+			else
+			{
+	      popMenu(true) ;
+			}
+			SelectNewModel = 0 ;
+		}
+		else
+		{
+			return ;
+		}
+	}
   TITLE(PSTR(STR_MODELSEL)) ;
 
   uint8_t subOld  = mstate2.m_posVert ;
@@ -1391,56 +1471,59 @@ void menuModelSelect(uint8_t event)
 //uint32_t checkRssi(uint32_t swappingModels) ;
 //				checkRssi(1) ;
 				
-				WatchdogTimeout = 300 ;		// 3 seconds
-//				stopMusic() ;
-//				pausePulses() ;
-				eeDirty(EE_MODEL) ;
-				ee32WaitFinished() ;
-
-				g_eeGeneral.currModel = mstate2.m_posVert ;
-//				chainMenu(menuSwapModel) ;
-        
-//				while( xSemaphoreTake( SpiMutex, pdMS_TO_TICKS( 2 ) ) != pdTRUE )
-//				{
-//					// wait
-//				}
-				ee32LoadModel(g_eeGeneral.currModel) ; //load default values
-				xSemaphoreGive( SpiMutex ) ;
-				g_model.Module[INTERNAL_MODULE].protocol = PROTO_OFF ;
-//				eeLoadModel( g_eeGeneral.currModel ) ;
-//				loadModelImage() ;
-
-//				protocolsToModules() ;
-				JustLoadedModel = 1 ;
-//  			checkTHR();
-//				checkCustom() ;
-//				checkSwitches() ;
-//				checkMultiPower() ;
-// 				perOut( g_chans512, NO_DELAY_SLOW | FADE_FIRST | FADE_LAST ) ;
+				SelectNewModel = mstate2.m_posVert | ( popidx << 8 ) ;
+				return ;
 				
-//				SportStreamingStarted = 0 ;
+//				WatchdogTimeout = 300 ;		// 3 seconds
+////				stopMusic() ;
+////				pausePulses() ;
+//				eeDirty(EE_MODEL) ;
+//				ee32WaitFinished() ;
 
-//				speakModelVoice() ;
-//        resetTimers();
-				VoiceCheckFlag100mS |= 2 ;// Set switch current states
-				processSwitches() ;	// Guarantee unused switches are cleared
-//				telemetry_init( decodeTelemetryType( g_model.telemetryProtocol ) ) ;
-//				resumePulses() ;
-//#ifdef LUA
-//				luaLoadModelScripts() ;
-//#endif
-//#ifdef BASIC
-//				basicLoadModelScripts() ;
-//#endif
-//        STORE_GENERALVARS;
-				if ( ( PopupData.PopupActive == 2 ) || ( popidx == 2 ) )
-				{
-					chainMenu(menuModelIndex) ;
-				}
-				else
-				{
-	        popMenu(true) ;
-				}
+//				g_eeGeneral.currModel = mstate2.m_posVert ;
+////				chainMenu(menuSwapModel) ;
+        
+////				while( xSemaphoreTake( SpiMutex, pdMS_TO_TICKS( 2 ) ) != pdTRUE )
+////				{
+////					// wait
+////				}
+//				ee32LoadModel(g_eeGeneral.currModel) ; //load default values
+//				xSemaphoreGive( SpiMutex ) ;
+//				g_model.Module[INTERNAL_MODULE].protocol = PROTO_OFF ;
+////				eeLoadModel( g_eeGeneral.currModel ) ;
+////				loadModelImage() ;
+
+////				protocolsToModules() ;
+//				JustLoadedModel = 2 ;
+////  			checkTHR();
+////				checkCustom() ;
+////				checkSwitches() ;
+////				checkMultiPower() ;
+//// 				perOut( g_chans512, NO_DELAY_SLOW | FADE_FIRST | FADE_LAST ) ;
+				
+////				SportStreamingStarted = 0 ;
+
+////				speakModelVoice() ;
+////        resetTimers();
+//				VoiceCheckFlag100mS |= 2 ;// Set switch current states
+//				processSwitches() ;	// Guarantee unused switches are cleared
+////				telemetry_init( decodeTelemetryType( g_model.telemetryProtocol ) ) ;
+////				resumePulses() ;
+////#ifdef LUA
+////				luaLoadModelScripts() ;
+////#endif
+////#ifdef BASIC
+////				basicLoadModelScripts() ;
+////#endif
+////        STORE_GENERALVARS;
+//				if ( ( PopupData.PopupActive == 2 ) || ( popidx == 2 ) )
+//				{
+//					chainMenu(menuModelIndex) ;
+//				}
+//				else
+//				{
+//	        popMenu(true) ;
+//				}
 			}
 			else if ( popidx == 5 )		// Delete
 			{

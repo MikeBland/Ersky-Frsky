@@ -447,7 +447,7 @@ void putsDrSwitches( uint16_t x, uint16_t y, int16_t idx1, uint8_t att)
 	if ( ( z <= HSW_Ttrmup ) && ( z >= HSW_Etrmdn ) )
 	{
 		z -= HSW_Etrmdn ;
-	  lcd_putsAttIdx(x+FW,y,XPSTR("\003EtdEtuAtdAtuRtdRtuTtdTtu"),z,att) ;
+	  lcd_putsAttIdx(x+FW,y,XPSTR("\003EtuEtdAtuAtdRtuRtdTtuTtd"),z,att) ;
 		return ;
 	}
 	if ( ( z <= HSW_FM6 ) && ( z >= HSW_FM0 ) )
@@ -2467,6 +2467,10 @@ void menuTextHelp(uint8_t event)
 			if ( idx > MIXSRC_AIL )
 			{
 				idx += MIXSRC_MAX - MIXSRC_AIL - 1 ;
+				if ( idx >= MIXSRC_MAX + 57  )
+				{
+					idx += 5 ;
+				}
 			}
 //			idx = unmapMixSource( idx, &swidx ) ;
 ////			idx = unmapPots( idx ) ;

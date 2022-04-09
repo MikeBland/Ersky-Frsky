@@ -232,7 +232,7 @@ int16_t edit_dr_switch( uint16_t x, uint16_t y, int16_t drswitch, uint8_t attr, 
 		{
 			if ( drswitch > 255 )
 			{
-				drswitch = switchUnMap( drswitch - 256 ) + MaxSwitchIndex ;
+				drswitch = switchUnMap( drswitch - 256 ) + MaxSwitchIndex - 1 ;
 			}
 			else
 			{
@@ -332,7 +332,7 @@ static void editTimer( uint8_t sub, uint8_t event )
 			break ;
 
 			case 1 :
-  			lcd_puts_Pleft( y, PSTR(STR_TRIGGERA));
+  			lcd_puts_Pleft( y, PSTR(STR_TRIGGERA) ) ;
   			if(attr)
 				{
 					CHECK_INCDEC_H_MODELVAR( ptm->tmrModeA, 0, 1+2+24+8 ) ;
@@ -1147,6 +1147,9 @@ void menuTemplates(uint8_t event)
   }
 }
 
+// This is in two places
+#define NUM_MIX_SWITCHES	(4+NUM_SKYCSW)
+
 void menuMixOne(uint8_t event)
 {
 	uint8_t numItems = 15 ;
@@ -1156,7 +1159,7 @@ void menuMixOne(uint8_t event)
 	mstate2.check_columns( event, numItems-1 ) ;
 	uint16_t x = TITLE( PSTR(STR_EDIT_MIX)) ;
 	
-//	uint32_t num_mix_switches = NUM_MIX_SWITCHES ;
+	uint32_t num_mix_switches = NUM_MIX_SWITCHES ;
 
 //	if ( event == EVT_ENTRY )
 //	{
@@ -1167,7 +1170,16 @@ void menuMixOne(uint8_t event)
 		SingleExpoChan = 0 ;
 		if ( TextResult )
 		{
-			md2->srcRaw = TextIndex + 1 ;
+			uint8_t idx = TextIndex + 1 ;
+			if ( idx > MIXSRC_AIL )
+			{
+				idx += MIXSRC_MAX - MIXSRC_AIL - 1 ;
+				if ( idx >= MIXSRC_MAX + 57  )
+				{
+					idx += 5 ;
+				}
+			}
+			md2->srcRaw = idx ;
 	    eeDirty(EE_MODEL) ;
 		}
 	}
@@ -1197,9 +1209,14 @@ void menuMixOne(uint8_t event)
 					uint8_t x = value ;
 					if ( x > MIXSRC_AIL )
 					{
+						if ( x >= MIXSRC_MAX + 57  )
+						{
+							x -= 5 ;
+						}
 						x -= MIXSRC_MAX - MIXSRC_AIL - 1 ;
 					}
-					CHECK_INCDEC_H_MODELVAR( x, 1, NUM_SKYXCHNRAW+1+MAX_GVARS+1+NUM_SCALERS+8) ;
+					CHECK_INCDEC_H_MODELVAR( x, 1, NUM_SKYXCHNRAW+1+MAX_GVARS+1+NUM_SCALERS+8 + (num_mix_switches-1) - 1 + 4 - 8) ;
+
 					if ( event == EVT_KEY_BREAK(KEY_MENU) )
 					{
 						// Long MENU pressed
@@ -1214,6 +1231,10 @@ void menuMixOne(uint8_t event)
 					if ( x > MIXSRC_AIL )
 					{
 						x += MIXSRC_MAX - MIXSRC_AIL - 1 ;
+						if ( x >= MIXSRC_MAX + 57  )
+						{
+							x += 5 ;
+						}
 					}
 					md2->srcRaw = x ;
 						
@@ -3303,17 +3324,35 @@ void menuCustomCheck(uint8_t event)
 
 void menuModelGeneral( uint8_t event )
 {
+	static uint8_t voiceCall = 0 ;			
 	static MState2 mstate2;
   TITLE( PSTR(STR_General) ) ;
 	uint8_t subN = 0 ;
 	uint8_t attr = 0 ;
+	uint8_t type ;
 
 //			lcd_puts_Pleft( 0, XPSTR("\016(ver  )") ) ;
 //    	lcd_putc( 19*FW, 0, g_model.modelVersion + '0' ) ;
 
-	mstate2.check_columns(event, 14-1) ;
+	mstate2.check_columns(event, 15-1) ;
   int8_t  sub    = mstate2.m_posVert;
   uint8_t t_pgOfs ;
+
+	if ( event == EVT_ENTRY_UP )
+	{
+		if ( voiceCall )
+		{
+			if ( voiceCall == 1 )
+			{
+				if ( FileSelectResult == 1 )
+				{
+					g_model.modelVoice = -1 ;
+					copyFileName( g_model.modelVname, SelectedVoiceFileName, 8 ) ;
+				}
+			}
+			voiceCall = 0 ;
+		}
+	}
 
 	t_pgOfs = evalOffset( sub ) ;
 
@@ -3324,6 +3363,27 @@ void menuModelGeneral( uint8_t event )
 		alphaEditName( 11*FW-2, y, (uint8_t *)g_model.name, sizeof(g_model.name), sub==subN, (uint8_t *)PSTR( "Model Name") ) ;
 		validateName( (uint8_t *)g_model.name, sizeof(g_model.name) ) ;
 		y += FH ;
+	}
+	subN += 1 ;
+
+
+	if(t_pgOfs<=subN)
+	{
+		if(sub==subN)
+		{
+			if ( event==EVT_KEY_LONG(KEY_MENU) )
+			{
+				voiceCall = 1 ;
+				VoiceFileType = VOICE_FILE_TYPE_NAME ;
+		   	pushMenu( menuSelectVoiceFile ) ;
+			}
+		}
+		lcd_puts_Pleft( y,XPSTR("Voice File"));
+		type = (sub==subN) ;
+		alphaEditName( 11*FW-2, y, (uint8_t *)g_model.modelVname, sizeof(g_model.modelVname), type | ALPHA_NO_NAME, (uint8_t *)XPSTR( "FileName") ) ;
+		validateName( (uint8_t *)g_model.modelVname, sizeof(g_model.modelVname) ) ;
+
+		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
 	}
 	subN += 1 ;
 
@@ -3695,7 +3755,7 @@ void editOneSwitchItem( uint8_t event, uint32_t item, uint32_t index )
 void displayLogicalSwitch( uint16_t x, uint16_t y, uint32_t index )
 {
 	uint8_t attr ;
-  attr = (getSwitch00( CSW_INDEX + index + 1 ) ) ? INVERS : 0 ;
+  attr = (getSwitch00( CSW_INDEX + index ) ) ? INVERS : 0 ;
   lcd_putc( x, y, 'L' ) ;
   lcd_putcAtt( x + FW, y, index + (index>8 ? 'A'-9: '1'), attr ) ;
 }
@@ -4896,7 +4956,7 @@ void menuTelemetry(uint8_t event)
 //		Columns = 1 ;
 //	}
   
-	event = mstate2.check_columns( event, 11-1 ) ;
+	event = mstate2.check_columns( event, 12-1 ) ;
 	
 	t_pgOfs = evalOffset( sub ) ;
 
@@ -4986,6 +5046,7 @@ void menuTelemetry(uint8_t event)
 			}
 			else
 			{
+				index = i - 2 ;
 				lcd_outdezAtt( 16*FW, y, g_model.frsky.channels[index].ratio3_4, (sub==subN && subSub==0 ? blink:0)|PREC2 ) ;
 				lcd_outdezAtt( 21*FW, y, TelemetryData[FR_A3+(index*1)], PREC2 ) ;
     		unit = g_model.frsky.channels[index].units3_4 ;
@@ -5049,6 +5110,20 @@ void menuTelemetry(uint8_t event)
 		{
 			CHECK_INCDEC_H_MODELVAR( g_model.currentSource, 0, 3 + NUM_SCALERS ) ;
 	  }
+		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
+	}
+	subN += 1 ;
+
+	if(t_pgOfs<=subN)
+	{
+		lcd_puts_Pleft( y, PSTR(STR_FAS_OFFSET) );
+    attr = PREC1 ;
+		if ( (sub == subN) )
+		{
+			attr = blink | PREC1 ;
+      CHECK_INCDEC_H_MODELVAR( g_model.FASoffset, 0, 15 ) ;
+		}
+  	lcd_outdezAtt( 15*FW, y, g_model.FASoffset, attr ) ;
 		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
 	}
 	subN += 1 ;

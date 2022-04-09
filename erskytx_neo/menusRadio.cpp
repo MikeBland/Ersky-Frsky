@@ -182,7 +182,7 @@ void menuAlarms( uint8_t event )
 {
 	TITLE( STR_Alarms ) ;
 	static MState2 mstate2;
-	event = mstate2.check_columns(event, 4-1) ;
+	event = mstate2.check_columns(event, 5-1) ;
 
 	uint32_t sub = mstate2.m_posVert ;
 	uint32_t y = FH ;
@@ -195,7 +195,7 @@ void menuAlarms( uint8_t event )
   if(sub==subN)
 	{
 		attr = blink | LEFT ;
-		g_eeGeneral.vBatWarn = checkIncDec16( g_eeGeneral.vBatWarn, 30, 50, EE_GENERAL) ;
+		g_eeGeneral.vBatWarn = checkIncDec16( g_eeGeneral.vBatWarn, 50, 90, EE_GENERAL) ;
 	}
   putsVolts(PARAM_OFS, y, g_eeGeneral.vBatWarn, attr);
   y += FH ;
@@ -234,10 +234,10 @@ void menuAlarms( uint8_t event )
 // 	y += FH ;
 //	subN += 1 ;
 
-//  b = g_eeGeneral.disableRxCheck;
-//  g_eeGeneral.disableRxCheck = offonMenuItem( b, y, XPSTR("Receiver Warning"), sub == subN ) ;
-// 	y += FH ;
-//	subN += 1 ;
+  b = g_eeGeneral.disableRxCheck;
+  g_eeGeneral.disableRxCheck = offonMenuItem( b, y, XPSTR("Receiver Warning"), sub == subN ) ;
+ 	y += FH ;
+	subN += 1 ;
 	 
 }
 
@@ -466,7 +466,7 @@ void menuAudio( uint8_t event )
 	if(t_pgOfs<=subN)
 	{
 		lcd_puts_Pleft( y, XPSTR( "Welcome Type") ) ;
-		g_eeGeneral.welcomeType = checkIndexed( y, XPSTR("132\002""\006System  NoneCustom"), g_eeGeneral.welcomeType, sub==subN ) ;
+		g_eeGeneral.welcomeType = checkIndexed( y, XPSTR("\132\002""\006System  NoneCustom"), g_eeGeneral.welcomeType, sub==subN ) ;
 		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
 	}
 	subN += 1 ;
@@ -572,16 +572,16 @@ void menuControls( uint8_t event )
 	TITLE( STR_Controls ) ;
 	
 	static MState2 mstate2;
-	mstate2.check_columns(event, 7-1) ;
+	mstate2.check_columns(event, 6-1) ;
 
 	uint8_t subN = 0 ;
   int8_t sub = mstate2.m_posVert ;
 	uint8_t y = FH ;
 	uint8_t blink = InverseBlink ;
 
-	if ( sub < 4 )
-	{
-		displayNext() ;
+//	if ( sub < 3 )
+//	{
+//		displayNext() ;
 		uint8_t attr = sub==subN ? blink : 0 ;
 		lcd_puts_Pleft( y, PSTR(STR_CHAN_ORDER) ) ;//   RAET->AETR
 		uint8_t bch = bchout_ar[g_eeGeneral.templateSetup] ;
@@ -596,13 +596,13 @@ void menuControls( uint8_t event )
  		y += FH ;
 		subN += 1 ;
 
-		uint8_t ct = g_eeGeneral.crosstrim + ( g_eeGeneral.xcrosstrim << 1 ) ;
-  	lcd_puts_Pleft(y, PSTR(STR_CROSSTRIM));
-		ct = checkIndexed( y, XPSTR("\146\002\003OFFON Vtg"), ct, (sub==subN) ) ;
-		g_eeGeneral.crosstrim = ct ;
-		g_eeGeneral.xcrosstrim = ct >> 1 ;
- 		y += FH ;
-		subN += 1 ;
+//		uint8_t ct = g_eeGeneral.crosstrim + ( g_eeGeneral.xcrosstrim << 1 ) ;
+//  	lcd_puts_Pleft(y, PSTR(STR_CROSSTRIM));
+//		ct = checkIndexed( y, XPSTR("\146\002\003OFFON Vtg"), ct, (sub==subN) ) ;
+//		g_eeGeneral.crosstrim = ct ;
+//		g_eeGeneral.xcrosstrim = ct >> 1 ;
+// 		y += FH ;
+//		subN += 1 ;
 
 		lcd_puts_Pleft( y, PSTR(STR_MODE) );
 		for ( uint32_t i = 0 ; i < 4 ; i += 1 )
@@ -632,10 +632,10 @@ void menuControls( uint8_t event )
   	for(uint8_t i=0; i<4; i++) putsChnRaw( (6+4*i)*FW+RCON_OFF_0, y, modeFixValue( i ), 0 ) ;//sub==3?INVERS:0);
  		y += FH ;
 		subN += 1 ;
-	}
-	else
-	{
-		subN = 4 ;
+//	}
+//	else
+//	{
+//		subN = 3 ;
 			
     for ( uint32_t i = 0 ; i < 4 ; i += 1 )
 		{
@@ -648,7 +648,7 @@ void menuControls( uint8_t event )
 	 		y += FH ;
 			subN += 1 ;
 		}
-	}
+//	}
 }
 
 void edit_stick_deadband(uint8_t x, uint8_t y, const char *s, uint8_t ch, uint8_t edit)
