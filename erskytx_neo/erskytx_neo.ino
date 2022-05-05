@@ -3288,7 +3288,7 @@ void loop(void)
 		}
 		TenMsFlag = 1 ;
 		Tenms += 1 ;
-		MixTick10ms = 1 ;
+//		MixTick10ms = 1 ;
 	}
 
 //	time = millis() ;

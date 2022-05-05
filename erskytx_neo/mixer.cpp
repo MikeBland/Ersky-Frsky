@@ -60,6 +60,15 @@ extern uint32_t Used1sec10ms ;
 #define OSMP_ROUNDUP	0
 #define OSMP_SHIFT		2
 
+struct t_fade
+{
+uint8_t  fadePhases ;
+uint16_t fadeRate ;
+uint16_t fadeWeight ;
+uint16_t fadeScale[MAX_MODES+1] ;
+int32_t  fade[NUM_SKYCHNOUT] ;
+} Fade ;
+
 
 extern EE_X20General g_eeGeneral ;
 
@@ -585,6 +594,128 @@ void getADC_osmp()
 
 
 
+void perOutPhase( int16_t *chanOut, uint8_t att ) 
+{
+	static uint8_t lastPhase ;
+  static uint16_t lastTMR ;
+	uint8_t thisPhase ;
+	struct t_fade *pFade ;
+	pFade = &Fade ;
+
+//#ifdef PCBX9D
+// #ifdef LATENCY
+//	GPIOA->ODR |= 0x4000 ;
+// #endif	
+//#endif
+
+	uint16_t t10ms ;
+	
+	t10ms = get_tmr10ms() ;
+  MixTick10ms = ((uint16_t)(t10ms - lastTMR)) != 0 ;
+  lastTMR = t10ms ;
+
+	thisPhase = getFlightPhase() ;
+	if ( thisPhase != lastPhase )
+	{
+		uint8_t time1 = 0 ;
+		uint8_t time2 ;
+		
+		if ( lastPhase )
+		{
+      time1 = g_model.phaseData[(uint8_t)(lastPhase-1)].fadeOut ;
+		}
+		if ( thisPhase )
+		{
+      time2= g_model.phaseData[(uint8_t)(thisPhase-1)].fadeIn ;
+			if ( time2 > time1 )
+			{
+        time1 = time2 ;
+			}
+		}
+		if ( time1 )
+		{
+			pFade->fadeRate = (25600 / 50) / time1 ;
+			pFade->fadePhases |= ( 1 << lastPhase ) | ( 1 << thisPhase ) ;
+		}
+		lastPhase = thisPhase ;
+	}
+	att |= FADE_FIRST ;
+	if ( pFade->fadePhases )
+	{
+		pFade->fadeWeight = 0 ;
+		uint8_t fadeMask = 1 ;
+    for (uint8_t p=0; p<MAX_MODES+1; p++)
+		{
+			if ( pFade->fadePhases & fadeMask )
+			{
+				if ( p != thisPhase )
+				{
+					CurrentPhase = p ;
+					pFade->fadeWeight += pFade->fadeScale[p] ;
+					perOut( chanOut, att ) ;
+					att &= ~FADE_FIRST ;				
+				}
+			}
+			fadeMask <<= 1 ;
+		}	
+	}
+	else
+	{
+		pFade->fadeScale[thisPhase] = 25600 ;
+	}
+	pFade->fadeWeight += pFade->fadeScale[thisPhase] ;
+	CurrentPhase = thisPhase ;
+	perOut( chanOut, att | FADE_LAST ) ;
+	
+	if ( pFade->fadePhases && MixTick10ms )
+	{
+		uint8_t fadeMask = 1 ;
+    for (uint8_t p=0; p<MAX_MODES+1; p+=1)
+		{
+			uint16_t l_fadeScale = pFade->fadeScale[p] ;
+			
+			if ( pFade->fadePhases & fadeMask )
+			{
+				uint16_t x = pFade->fadeRate * MixTick10ms ;
+				if ( p != thisPhase )
+				{
+          if ( l_fadeScale > x )
+					{
+						l_fadeScale -= x ;
+					}
+					else
+					{
+						l_fadeScale = 0 ;
+						pFade->fadePhases &= ~fadeMask ;						
+					}
+				}
+				else
+				{
+          if ( 25600 - l_fadeScale > x )
+					{
+						l_fadeScale += x ;
+					}
+					else
+					{
+						l_fadeScale = 25600 ;
+						pFade->fadePhases &= ~fadeMask ;						
+					}
+				}
+			}
+			else
+			{
+				l_fadeScale = 0 ;
+			}
+			pFade->fadeScale[p] = l_fadeScale ;
+			fadeMask <<= 1 ;
+		}
+	}
+//#ifdef PCBX9D
+// #ifdef LATENCY
+//	GPIOA->ODR &= ~0x4000 ;
+// #endif	
+//#endif
+}
 
 
 void runMixer()
@@ -593,7 +724,7 @@ void runMixer()
 	getADC_osmp() ;
 	
 	MixerDebugCount += 1 ;
-	perOut( g_chans512, 0 | FADE_FIRST ) ;
+	perOutPhase( g_chans512, 0 ) ;
 }
 
 void perOut(int16_t *chanOut, uint8_t att )
@@ -1280,6 +1411,24 @@ void perOut(int16_t *chanOut, uint8_t att )
 
         int32_t q = chans[i] ;// + (int32_t)g_model.limitData[i].offset*100; // offset before limit
 
+				if ( Fade.fadePhases )
+				{
+					int32_t l_fade = Fade.fade[i] ;
+					if ( att & FADE_FIRST )
+					{
+						l_fade = 0 ;
+					}
+					l_fade += ( q / 100 ) * Fade.fadeScale[CurrentPhase] ;
+					Fade.fade[i] = l_fade ;
+			
+					if ( ( att & FADE_LAST ) == 0 )
+					{
+						continue ;
+					}
+					l_fade /= Fade.fadeWeight ;
+					q = l_fade * 100 ;
+				}
+
     	  chans[i] = q / 100 ; // chans back to -1024..1024
         
 				ex_chans[i] = chans[i] ; //for getswitch
@@ -1427,7 +1576,6 @@ void perOut(int16_t *chanOut, uint8_t att )
 				}
 //				g_chans512[i] = q / 100 ; //copy consistent word to int-level
 		}
-	MixTick10ms = 0 ;
 }
 
 /*
