@@ -38,6 +38,7 @@
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
 #endif
+#include <BleGamepad.h>
 #include "erskyTx.h"
 #include "myeeprom.h"
 #include "menus.h"
@@ -90,6 +91,9 @@ int32_t pollSportFifo() ;
 void telemetryRecieveByte( uint8_t byte, uint32_t module ) ;
 uint8_t menuPressed() ;
 extern uint8_t LongMenuTimer ;
+
+void startJoystick() ;
+void handleJoystick() ;
 
 // Temporary -> mixer
 extern uint8_t	CurrentPhase ;
@@ -150,6 +154,7 @@ uint8_t Aw2LowRequired ;
 uint16_t g_LightOffCounter ;
 
 uint8_t JustLoadedModel ;
+uint8_t BTjoystickActive ;
 uint32_t checkRssi(uint8_t event) ;
 //uint8_t ModelWarningsActive ;
 
@@ -260,6 +265,8 @@ hw_timer_t *PTg0T1 ;	// 2Mhz_timer
 
 SemaphoreHandle_t SpiMutex = NULL ;
 StaticSemaphore_t SpiMutexBuffer ;
+
+BleGamepad bleGamepad("FrskyNeo", "Joystick", 100);
 
 void checkAw1() ;
 void checkAw2() ;
@@ -3561,6 +3568,15 @@ extern uint32_t TotalExecTime ;
 				{
 //					if ( ! PoweringOff )
 //					{
+
+					if ( BTjoystickActive )
+					{
+  					if (bleGamepad.isConnected() )
+						{
+							handleJoystick() ;						
+						}
+					}
+						
 						ScriptActive = 0 ;
 						g_menuStack[g_menuStackPtr](event) ;
 #if defined(LUA) || defined(BASIC)
@@ -4057,5 +4073,71 @@ void check_backlight()
 	{
     BACKLIGHT_OFF ;
 	}
+}
+
+
+void startJoystick()
+{
+  bleGamepad.begin() ;
+//  bleGamepad.setAutoReport(false) ; // to disable auto reporting, and then use bleGamepad.sendReport(); as needed
+}
+
+void handleJoystick()
+{
+	// add in switches
+	
+  if( getSwitch00(HSW_SA0) )
+	{
+		bleGamepad.press(BUTTON_1) ;
+	}
+	else
+	{
+		bleGamepad.release(BUTTON_1) ;
+	}
+  if( getSwitch00(HSW_SA2) )
+	{
+		bleGamepad.press(BUTTON_2) ;
+	}
+	else
+	{
+		bleGamepad.release(BUTTON_2) ;
+	}
+ 	if( getSwitch00(HSW_SB0) )
+	{
+		bleGamepad.press(BUTTON_3) ;
+	}
+	else
+	{
+		bleGamepad.release(BUTTON_3) ;
+	}
+  if( getSwitch00(HSW_SC0) )
+	{
+		bleGamepad.press(BUTTON_4) ;
+	}
+	else
+	{
+		bleGamepad.release(BUTTON_4) ;
+	}
+  if( getSwitch00(HSW_SC2) )
+	{
+		bleGamepad.press(BUTTON_5) ;
+	}
+	else
+	{
+		bleGamepad.release(BUTTON_5) ;
+	}
+ 	if( getSwitch00(HSW_SD0) )
+	{
+		bleGamepad.press(BUTTON_6) ;
+	}
+	else
+	{
+		bleGamepad.release(BUTTON_6) ;
+	}
+
+	bleGamepad.setLeftThumb( g_chans512[0] * 31, (-g_chans512[1]) * 31 ) ;
+	bleGamepad.setRightThumb( g_chans512[2] * 31, g_chans512[3] * 31 ) ;
+//  bleGamepad.setBatteryLevel(g_vbat10mV/10) ;
+	bleGamepad.sendReport() ;
 }
 

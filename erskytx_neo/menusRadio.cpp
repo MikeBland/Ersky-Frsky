@@ -63,6 +63,9 @@ extern const uint8_t GvaString[] ;
 extern uint8_t VoiceFileType ;
 extern char SelectedVoiceFileName[] ;
 extern uint8_t FileSelectResult ;
+extern uint8_t BTjoystickActive ;
+
+extern void startJoystick() ;
 
 void menuVersion(uint8_t event) ;
 void menuGlobalVoiceAlarm(uint8_t event) ;
@@ -239,6 +242,29 @@ void menuAlarms( uint8_t event )
  	y += FH ;
 	subN += 1 ;
 	 
+}
+
+
+
+void menuBluetooth( uint8_t event )
+{
+	uint8_t value ;
+	TITLE( "Bluetooth" ) ;
+	static MState2 mstate2;
+	event = mstate2.check_columns(event, 1-1) ;
+	uint32_t sub = mstate2.m_posVert ;
+	uint8_t subN = 0 ;
+
+	value = BTjoystickActive ;
+	BTjoystickActive = onoffMenuItem( BTjoystickActive, 2*FH, XPSTR("Enable Joystick"), sub == subN ) ;
+	
+	if ( BTjoystickActive )
+	{
+		if ( value == 0 )
+		{
+			startJoystick() ;
+		}
+	}
 }
 
 
@@ -897,7 +923,7 @@ enum GENERAL_INDEX
 	M_HARDWARE,
 	M_CALIB,
 //#ifdef BLUETOOTH
-//	M_BLUETOOTH,
+	M_BLUETOOTH,
 //#endif
 //	M_TRAINER,
 	M_VERSION,
@@ -966,8 +992,9 @@ void menuRadioIndex(uint8_t event)
 		case M_DIAGANA :
     	pushMenu(menuDiagAna) ;
 		break ;
-
-
+		case M_BLUETOOTH :
+    	pushMenu(menuBluetooth) ;
+		break ;
 	}
 	
 	uint32_t sub = mstate.m_posVert ;
@@ -989,7 +1016,7 @@ static const char *in_Strings[] =
 	STR_Hardware,
 	STR_Calibration,
 //	#ifdef BLUETOOTH
-//	STR_Bluetooth,
+	STR_Bluetooth,
 //	#endif
 //	STR_Trainer,
 	STR_Version,
