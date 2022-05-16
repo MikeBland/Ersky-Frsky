@@ -155,6 +155,7 @@ uint16_t g_LightOffCounter ;
 
 uint8_t JustLoadedModel ;
 uint8_t BTjoystickActive ;
+uint8_t BTjoystickStarted ;
 uint32_t checkRssi(uint8_t event) ;
 //uint8_t ModelWarningsActive ;
 
@@ -4078,8 +4079,12 @@ void check_backlight()
 
 void startJoystick()
 {
-  bleGamepad.begin() ;
-//  bleGamepad.setAutoReport(false) ; // to disable auto reporting, and then use bleGamepad.sendReport(); as needed
+	if ( !BTjoystickStarted)
+	{
+		BTjoystickStarted = 1 ;
+  	bleGamepad.begin() ;
+//  	bleGamepad.setAutoReport(false) ; // to disable auto reporting, and then use bleGamepad.sendReport(); as needed
+	}
 }
 
 void handleJoystick()
@@ -4137,6 +4142,9 @@ void handleJoystick()
 
 	bleGamepad.setLeftThumb( g_chans512[0] * 31, (-g_chans512[1]) * 31 ) ;
 	bleGamepad.setRightThumb( g_chans512[2] * 31, g_chans512[3] * 31 ) ;
+	bleGamepad.setTriggers( g_chans512[4] * 31, g_chans512[5] * 31 ) ;
+	bleGamepad.setSliders( g_chans512[6] * 31, g_chans512[7] * 31 ) ;
+
 //  bleGamepad.setBatteryLevel(g_vbat10mV/10) ;
 	bleGamepad.sendReport() ;
 }
