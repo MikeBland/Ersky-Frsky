@@ -3080,10 +3080,16 @@ void alertMessages( const char * s, const char * t )
 	lcd_puts_P(0, 6*FH, PSTR(STR_PRESS_KEY_SKIP) ) ;
 }
 
+extern uint16_t S_anaFilt[] ;
+void getADC_osmp() ;
+
 uint8_t checkThrottlePosition()
 {
 //  uint8_t thrchn=(2-(g_eeGeneral.stickMode&1));//stickMode=0123 -> thr=2121
-	int16_t v = CalibratedStick[2] ;
+//	int16_t v = CalibratedStick[2] ;
+	getADC_osmp() ;
+  uint8_t thrchn=(2-(g_eeGeneral.stickMode&1));//stickMode=0123 -> thr=2121
+	int16_t v = scaleAnalog( S_anaFilt[thrchn], thrchn ) ;
 	if ( g_model.throttleIdle )
 	{
 		if ( abs( v ) < THRCHK_DEADBAND )
@@ -3115,7 +3121,12 @@ void endModelChecks()
 {
 	JustLoadedModel = 0 ;
 	popMenu( 0 ) ;
+	VoiceCheckFlag100mS |= 6 ;// Set switch current states (global)
+	processVoiceAlarms() ;
+	VoiceCheckFlag100mS = 0 ;
 	speakModelVoice() ;
+	VoiceCheckFlag100mS |= 2 ;// Set switch current states
+	processSwitches() ;	// Guarantee unused switches are cleared
 }
 
 
@@ -3152,8 +3163,6 @@ void checkCustom( uint8_t event )
 
   timer = 0 ;
 	
-	putSystemVoice( SV_CUSTOM_WARN, V_CUSTOM_WARN ) ;
-
 //    getADC_single();
 //		check_backlight() ;
 
@@ -3169,6 +3178,10 @@ void checkCustom( uint8_t event )
 	else
 	{
 		timer = 0 ;
+	}
+	if ( event == EVT_ENTRY )
+	{
+		putSystemVoice( SV_CUSTOM_WARN, V_CUSTOM_WARN ) ;
 	}
 	alertMessages( XPSTR("Custom Check"), XPSTR("Set Control") ) ;
 	putsChnRaw( 9*FW, 2*FH, pdata->source, 0 ) ;
@@ -3208,6 +3221,11 @@ void checkSwitches( uint8_t event )
 		lcd_putsAtt( 32, 0*FH, XPSTR("SWITCH"), DBLSIZE) ;
 		lcd_putsAtt( 32, 2*FH, PSTR(STR_WARNING), DBLSIZE) ;
 
+		if ( event == EVT_ENTRY )
+		{
+			putSystemVoice( SV_SW_WARN, V_SW_WARN ) ;
+		}
+
 		j = 3 ;
 		for ( i = 0 ; i < 4 ; i += 1 )
 		{
@@ -3242,6 +3260,7 @@ void checkSwitches( uint8_t event )
 
 void checkThrottle( uint8_t event )
 {
+	static uint16_t timer ;
   if(g_eeGeneral.disableThrottleWarning)
 	{
 //		popMenu( 0 ) ;
@@ -3269,7 +3288,17 @@ void checkThrottle( uint8_t event )
 	lcd_puts_P(0, 5*FH, PSTR(STR_THR_NOT_IDLE) ) ;
 	lcd_puts_P(0, 6*FH, PSTR(STR_RST_THROTTLE) ) ;
 	lcd_puts_P(0, 7*FH, PSTR(STR_PRESS_KEY_SKIP) ) ;
-	
+
+	if ( event == EVT_ENTRY )
+	{
+		timer = 0 ;
+	}
+
+	if ( ++timer == 10 )
+	{
+		putSystemVoice( SV_TH_WARN, V_THR_WARN ) ;
+	}
+	 
 	if ( event == EVT_KEY_BREAK(KEY_EXIT) )
 	{
 //		popMenu( 0 ) ;
@@ -3629,9 +3658,7 @@ extern uint32_t TotalExecTime ;
 			setBacklightBrightness( g_eeGeneral.bright ) ;		
 			g_model.Module[INTERNAL_MODULE].protocol = PROTO_OFF ;
 			JustLoadedModel = 2 ;
-	
-			VoiceCheckFlag100mS |= 6 ;// Set switch current states (global)
-
+//			VoiceCheckFlag100mS |= 6 ;// Set switch current states (global)
 			Activated = 1 ;
 
 			if ( g_eeGeneral.welcomeType == 0 )
