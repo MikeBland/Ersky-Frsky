@@ -4468,7 +4468,7 @@ void menuRangeBind(uint8_t event)
 
 	if ( binding == 0 )
 	{
-//		lcd_outdezAtt( 12 * FW, 4*FH, FrskyHubData[FR_RXRSI_COPY], DBLSIZE);
+		lcd_outdezAtt( 12 * FW, 4*FH, TelemetryData[FR_RXRSI_COPY], DBLSIZE) ;
 	}
 
 //	if ( ( ( g_model.Module[0].protocol == PROTO_MULTI ) && ( s_currIdx == 0 ) ) ||
@@ -4702,6 +4702,10 @@ void editOneProtocol( uint8_t event )
 		case PROTO_PXX :
 			dataItems += 4 ;
 			need_bind_range |= 5 ;
+			if ( pModule->sub_protocol == 3 )	// R9M
+			{
+				dataItems += 2 ;
+			}
 		break ;
 //		case PROTO_MULTI :
 //			dataItems += 7 ;
@@ -4804,6 +4808,42 @@ void editOneProtocol( uint8_t event )
 				if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
 			}
 			subN += 1 ;
+				
+			if ( pModule->sub_protocol == 3 )	// R9M
+			{
+				if(t_pgOfs<=subN)
+				{
+					uint32_t temp ;
+				  lcd_puts_Pleft( y, XPSTR("Flex mode") );
+					temp = checkIndexed( y, XPSTR("\074\002\006""   OFF915MHz868MHz"), pModule->r9MflexMode, (sub==subN) ) ;
+					if ( temp )
+					{
+						if ( temp != pModule->r9MflexMode )
+						{
+							AlertType = ALERT_TYPE ;
+							AlertMessage = "\001Requires R9M non-\037\001certified firmware\037\001Check Frequency for\037\006your region" ;
+						}
+					}
+				}
+				if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
+				subN += 1 ;
+					
+				if(t_pgOfs<=subN)
+				{
+					char *s ; 
+					s = (char *)XPSTR("\074\003""\004  10 100 5001000") ;
+					if ( ( pModule->country == 2 ) && (pModule->r9MflexMode == 0) )
+					{
+						s = (char *)XPSTR("\074\003""\011  25(8ch) 25(16ch)200(16ch)500(16ch)") ;
+					}
+					lcd_puts_Pleft( y, XPSTR("Power (mW)") );
+					pModule->r9mPower = checkIndexed( y, s, pModule->r9mPower, (sub==subN) ) ;
+				}
+				if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
+				subN += 1 ;
+			}
+				
+				
 			if ( pModule->sub_protocol == 0 )	// D16
 			{
 				if(t_pgOfs<=subN)

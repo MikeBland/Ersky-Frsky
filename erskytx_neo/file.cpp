@@ -802,7 +802,7 @@ void generalDefault()
   g_eeGeneral.myVers   =  MDX20VERS;
   g_eeGeneral.currModel=  0;
 
-  g_eeGeneral.vBatWarn = 36 ;
+  g_eeGeneral.vBatWarn = 70 ;
   
 	g_eeGeneral.stickMode=  1;
 	g_eeGeneral.bright = 50 ;

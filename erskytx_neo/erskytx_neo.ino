@@ -314,7 +314,7 @@ void chargeLow()
 
 static void startTg0T1()
 {
-	PTg0T1 = timerBegin( 1, 40, true) ;
+	PTg0T1 = timerBegin( 1, 49, true) ;
 //	timerAlarmWrite( PTg0T0, 4999, true) ;
 //	timerAttachInterrupt( PTg0T0, timer0Interrupt, true) ;
 //	timerAlarmEnable( PTg0T0 ) ;
@@ -1986,7 +1986,7 @@ int16_t get_telemetry_value( int8_t channel )
     return s_timer[channel+2].s_timerVal ;
     
     case BATTERY :
-    return g_vbat10mV ;
+    return g_vbat10mV/10 ;
 
     case FR_ALT_BARO :
 		return TelemetryData[channel] + AltOffset ;
@@ -2942,6 +2942,7 @@ extern void p8hex( uint32_t value ) ;
 
 	if ( VoiceCheckFlag100mS & 1 )
 	{
+		static uint32_t delayTimer = 0 ;
 		processVoiceAlarms() ;
 		processVarioTones() ;
 		VoiceCheckFlag100mS = 0 ;
@@ -2950,6 +2951,65 @@ extern void p8hex( uint32_t value ) ;
 			if (TelemetryDataValid[i] )
 			{
 				TelemetryDataValid[i] -= 1 ;
+			}
+		}
+		// RSSI checks
+		if ( delayTimer )
+		{
+			delayTimer -= 1 ;
+		}
+		uint8_t redAlert = 0 ;
+		static uint8_t redCounter ;
+		static uint8_t orangeCounter ;
+		uint8_t rssiValue = TelemetryData[FR_RXRSI_COPY] ;
+
+		if ( FrskyStreaming )
+		{
+			int8_t offset ;
+			if ( g_model.enRssiRed == 0 )
+			{
+				offset = 42 ;	// rssiOffsetValue( 1 ) ;
+
+				if ( rssiValue && rssiValue < g_model.rssiRed + offset )
+				{
+					// Alarm
+					redAlert = 1 ;
+					orangeCounter += 1 ;
+					if ( ++redCounter > 3 )
+					{
+						if ( delayTimer == 0 )
+						{
+							putSystemVoice( SV_RSSICRIT, V_RSSI_CRITICAL ) ;
+							delayTimer = 40 ;	// 4 seconds
+						}
+						redCounter = 0 ;
+					}
+				}
+				else
+				{
+					redCounter = 0 ;
+				}
+			}
+			if ( ( redAlert == 0 ) && ( g_model.enRssiOrange == 0 ) )
+			{
+				offset = 45 ;	// rssiOffsetValue( 0 ) ;
+				if ( rssiValue && rssiValue < g_model.rssiOrange + offset )
+				{
+					// Alarm
+					if ( ++orangeCounter > 3 )
+					{
+						if ( delayTimer == 0 )
+						{
+							putSystemVoice( SV_RSSI_LOW, V_RSSI_WARN ) ;
+							delayTimer = 40 ;	// 4 seconds
+						}
+						orangeCounter = 0 ;
+					}
+				}
+				else
+				{
+					orangeCounter = 0 ;
+				}
 			}
 		}
 	}
@@ -3519,6 +3579,17 @@ void loop(void)
 					g_vbat10mV = BattAverage / 16 ;
 					BattAverage = 0 ;
 					BattCount = 0 ;
+
+        	static uint8_t s_batCheck ;
+        	s_batCheck += 16 ;
+        	if( s_batCheck < 16 )
+					{
+						if( (g_vbat10mV/10<g_eeGeneral.vBatWarn) && (g_vbat10mV>490) )
+						{
+							voiceSystemNameNumberAudio( SV_TXBATLOW, V_BATTERY_LOW, AU_TX_BATTERY_LOW ) ;
+//        	    if (g_eeGeneral.flashBeep) g_LightOffCounter = FLASH_DURATION;
+						}
+					}
 				}
 				UsbV = ( 498 * (uint32_t)AnalogData[5] ) / 4096 ;
 				m = UsbV > 380 ? 0 : LEDG_PIN ;

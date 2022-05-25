@@ -180,7 +180,7 @@ static void inactivityCheck()
   if( g_eeGeneral.inactivityTimer + 10 )
 	{
     InacCounter += 1 ;
-  	if( InacCounter >(((uint32_t)g_eeGeneral.inactivityTimer+10)*(100*60)))
+  	if( InacCounter >(((uint32_t)(g_eeGeneral.inactivityTimer+10))*(100*60)))
     if( ( InacCounter & 0x1FF ) == 1 )
 		{
 			SystemOptions &= ~SYS_OPT_MUTE ;						
@@ -486,8 +486,12 @@ int16_t calcExpo( uint8_t channel, int16_t value )
 
 //__attribute__((section(".itcm_text")))
 
+static uint16_t lastTMR ;
+
 void mixer_loop(void* pdata)
 {
+	lastTMR = get_tmr10ms() ;
+	
 	for(;;)
 	{
 // 		uint32_t dtimer = DWT->CYCCNT ;
@@ -597,7 +601,6 @@ void getADC_osmp()
 void perOutPhase( int16_t *chanOut, uint8_t att ) 
 {
 	static uint8_t lastPhase ;
-  static uint16_t lastTMR ;
 	uint8_t thisPhase ;
 	struct t_fade *pFade ;
 	pFade = &Fade ;
@@ -611,8 +614,17 @@ void perOutPhase( int16_t *chanOut, uint8_t att )
 	uint16_t t10ms ;
 	
 	t10ms = get_tmr10ms() ;
-  MixTick10ms = ((uint16_t)(t10ms - lastTMR)) != 0 ;
-  lastTMR = t10ms ;
+	if ( ((uint16_t)(t10ms - lastTMR)) != 0 )
+	{
+  	MixTick10ms = 1 ;
+  	lastTMR += 1 ;
+		inactivityCheck() ;
+//		trace(); //trace thr 0..32  (/32)
+	}
+	else
+	{
+  	MixTick10ms = 0 ;
+	}
 
 	thisPhase = getFlightPhase() ;
 	if ( thisPhase != lastPhase )
@@ -985,14 +997,6 @@ void perOut(int16_t *chanOut, uint8_t att )
           break;
       }
 	  }
-
-    if(MixTick10ms)
-		{
-			inactivityCheck() ;
-//			trace(); //trace thr 0..32  (/32)
-		}
-
-	
 	}
 	
 	

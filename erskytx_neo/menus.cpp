@@ -844,8 +844,6 @@ void menuScript(uint8_t event)
 
 
 
-uint8_t TempData[4] ;
-
 void menuDebug(uint8_t event)
 {
 	uint8_t x ;
@@ -1242,8 +1240,11 @@ void menuProc0(uint8_t event)
 			uint8_t x = FW*2 ;
 			displayTimer( x+14*FW-1, FH*2, 0, DBLSIZE|CONDENSED ) ;
 
-		extern uint16_t g_vbat10mV ;
-			lcd_outdezAtt( 113, 0*FH, g_vbat10mV, PREC2 ) ;
+extern uint16_t g_vbat10mV ;
+
+  		uint8_t att = g_vbat10mV/10 < g_eeGeneral.vBatWarn ? BLINK | PREC2 : PREC2 ;
+
+			lcd_outdezAtt( 113, 0*FH, g_vbat10mV, att ) ;
 			lcd_putc( 114, 0*FH, 'v' ) ;
 
 			doMainScreenGraphics() ;
