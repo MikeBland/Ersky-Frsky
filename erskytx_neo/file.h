@@ -63,6 +63,7 @@ void ee32SwapModels(uint8_t id1, uint8_t id2) ;
 void init_eeprom() ;
 uint16_t evalChkSum() ;
 void eeDirty(uint8_t msk) ;
+extern bool eeDuplicateModel(uint8_t id) ;
 
 void setModelFilename( uint8_t *filename, uint8_t modelIndex, uint32_t type ) ;
 

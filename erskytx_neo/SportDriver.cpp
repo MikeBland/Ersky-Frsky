@@ -108,6 +108,19 @@ void IRAM_ATTR sportUartIsr(void *arg)
 	}
 }
 
+void enableSportRx()
+{
+	uint32_t *p ;
+	GPIO.out1_w1ts.val = ( (uint32_t)1 << 14 ) ;	// Disabled
+	delay5uS() ;
+	p = (uint32_t *) 0x3FF44568 ;		// Output assign to uart
+	*p = 0x0100 ;		// GPIO output, non-inverted
+	GPIO.enable_w1tc = ( (uint32_t)1 << 14 ) ;	// Disabled
+	// make sure output disabled, input enabled
+	p = (uint32_t *) 0x3FF49030 ;		// IO_MUX_x_REG
+	*p |= 0x00000200 ;
+
+}
 
 uint8_t ELRSconfigured = 0 ;
 

@@ -277,6 +277,7 @@
 #define STR_BEEP_MODES     "\006Quiet ""NoKey ""xShort""Short ""Norm  ""Long  ""xLong "
 #define STR_SPEAKER_PITCH  "Speaker Pitch"
 #define STR_BRIGHTNESS     "Brightness"
+#define STR_MESSAGE        "MESSAGE"
 
 #define STR_VARIO_SRC      "Vario: Source"
 #define STR_VSPD_A2        "\004----vspdA2  SC1 SC2 SC3 SC4 SC5 SC6 SC7 SC8 "

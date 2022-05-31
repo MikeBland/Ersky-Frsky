@@ -969,6 +969,9 @@ void setup(void)
 	
 	//delay(20) ;
 
+	clearDisplay() ;
+	lcd_putsAtt( 3*FW, 3*FH, "POWER UP 2", DBLSIZE ) ;
+	refreshDisplay() ;
 
 	AwBits = readAws() ;
 	if ( ~AwBits & 0x40000 )	// Enter pressed
@@ -1048,6 +1051,9 @@ extern void voice_task(void* pdata) ;
 //	lcd_putcAtt( 6, 0, 'B', 0 ) ;
 //	refreshDisplay() ;
 
+	clearDisplay() ;
+	lcd_putsAtt( 3*FW, 3*FH, "POWER UP 3", DBLSIZE ) ;
+	refreshDisplay() ;
 	 
 	bool result = SPIFFS.begin() ;
 
@@ -2832,6 +2838,8 @@ void rtc_settime( t_time *ptr )
 void readClock() ;
 void writeClock( t_time *ptr ) ;
 
+extern uint16_t TelCounts[2] ;
+
 void doTenms()
 {
 	uint16_t m ;
@@ -2933,11 +2941,13 @@ extern void p8hex( uint32_t value ) ;
 	while ( Serial2.available() )
 	{
 		accessRecieveByte( Serial2.read(), 1 ) ;
+		TelCounts[0] += 1 ;
 	}
 	
 	while ( (byte = pollSportFifo() ) != -1 )
 	{
 		telemetryRecieveByte( byte, 1 ) ;
+		TelCounts[1] += 1 ;
 	}
 
 	if ( VoiceCheckFlag100mS & 1 )
@@ -3132,12 +3142,45 @@ void maintenance()
 	}	
 }
 
+static void almess( const char * s, uint8_t type )
+{
+	const char *h ;
+//  lcd_clear();
+  lcd_puts_Pleft(4*FW,s);
+	if ( type == ALERT_TYPE)
+	{
+    lcd_puts_P(64-6*FW,7*FH,"press EXIT");
+		h = PSTR(STR_ALERT) ;
+//  lcd_img( 1, 0, HandImage,0,0 ) ;
+
+	}
+	else
+	{
+		h = PSTR(STR_MESSAGE) ;
+	}
+  lcd_putsAtt(64-7*FW,0*FH, h,DBLSIZE);
+  refreshDisplay();
+}
+
 void alertMessages( const char * s, const char * t )
 {
   lcd_putsAtt(64-5*FW,0*FH,PSTR(STR_ALERT),DBLSIZE);
   lcd_puts_P(0,4*FH,s);
   lcd_puts_P(0,5*FH,t);
 	lcd_puts_P(0, 6*FH, PSTR(STR_PRESS_KEY_SKIP) ) ;
+}
+
+void alert(const char * s, bool defaults)
+{
+	AlertType = ALERT_TYPE ;
+	AlertMessage = s ;
+	return ;
+}
+
+
+void message(const char * s)
+{
+	almess( s, MESS_TYPE ) ;
 }
 
 extern uint16_t S_anaFilt[] ;
@@ -3187,7 +3230,45 @@ void endModelChecks()
 	speakModelVoice() ;
 	VoiceCheckFlag100mS |= 2 ;// Set switch current states
 	processSwitches() ;	// Guarantee unused switches are cleared
+
+	if ( g_model.Module[1].protocol == PROTO_PXX)
+	{
+extern void set_ext_serial_baudrate( uint32_t baudrate ) ;
+		if ( g_model.Module[1].sub_protocol == 3 )
+		{
+			set_ext_serial_baudrate( 420000 ) ;
+		}
+		else
+		{
+			set_ext_serial_baudrate( 450000 ) ;
+		}
+	}	
 }
+
+void checkFailsafe( uint8_t event )
+{
+	if ( g_model.Module[1].protocol != PROTO_OFF )
+	{
+		if ( g_model.Module[1].failsafeMode )
+		{
+			endModelChecks() ;
+			return ;
+		}
+	}
+
+  lcd_img( 1, 0, HandImage, 0, 0 ) ;
+  lcd_putsAtt(36, 0*FH, XPSTR("FAILSAFE"),DBLSIZE|CONDENSED) ;
+  lcd_putsAtt(36, 2*FH, PSTR(STR_WARNING),DBLSIZE|CONDENSED) ;
+	lcd_puts_P(0, 5*FH, XPSTR("Failsafe not set") ) ;
+	lcd_puts_P(0, 7*FH, PSTR(STR_PRESS_KEY_SKIP) ) ;
+
+	if ( event == EVT_KEY_BREAK(KEY_EXIT) )
+	{
+		endModelChecks() ;
+		return ;
+	}	 
+}
+
 
 
 void checkCustom( uint8_t event )
@@ -3200,7 +3281,7 @@ void checkCustom( uint8_t event )
 
 	if ( pdata->source == 0 )
 	{
-		endModelChecks() ;
+		chainMenu(checkFailsafe) ;
 		return ;
 	}
 //	if ( idx < 4 )
@@ -3215,7 +3296,7 @@ void checkCustom( uint8_t event )
 	value = readControl( idx ) ;
 	if ( ( value >= pdata->min ) && ( value <= pdata->max ) )
 	{
-		endModelChecks() ;
+		chainMenu(checkFailsafe) ;
 		return ;
 	}
 
@@ -3231,7 +3312,7 @@ void checkCustom( uint8_t event )
 	{
 		if ( ++timer > 19 )
 		{
-			endModelChecks() ;
+			chainMenu(checkFailsafe) ;
 			return ;
 		}
 	}
@@ -3251,7 +3332,7 @@ void checkCustom( uint8_t event )
 
 	if ( event == EVT_KEY_BREAK(KEY_EXIT) )
 	{
-		endModelChecks() ;
+		chainMenu(checkFailsafe) ;
 		return ;
 	}	 
 }
@@ -3599,106 +3680,152 @@ void loop(void)
 					writeI2CByte( AW2_ADDRESS, 3, Aw2Outputs[1] ) ;
 				}
 				
-//				lcd_outhex8( 100-24, 7*FH, readAws() ) ;
-
-				if ( JustLoadedModel == 2 )
+				if ( AlertMessage )
 				{
-					pushMenu( checkThrottle ) ;
-					JustLoadedModel = 1 ;
-				}
-				event = getEvent() ;
-				if ( EnterMenu )
-				{
-					event = EnterMenu ;
-					EnterMenu = 0 ;
-				}
-#if defined(LUA) || defined(BASIC)
-				uint32_t refreshNeeded = 0 ;
-				{
-extern uint32_t TotalExecTime ;
-					uint16_t execTime = getTmr2MHz() ;
-					refreshNeeded = basicTask( event, SCRIPT_LCD_OK	| SCRIPT_STANDALONE ) ;
-					execTime = (uint16_t)(getTmr2MHz() - execTime) ;
-					TotalExecTime += execTime ;
-					if ( refreshNeeded == 3 )
+					almess( AlertMessage, AlertType ) ;
+		#ifdef BASIC
+					if ( BasicErrorText[0] )
 					{
-						refreshNeeded = 0 ;
-//						if ( sd_card_ready() )
+						uint8_t i = 0 ;
+						uint8_t j = 4*FH ;
+						uint8_t c ;
+						char *p = (char *)BasicErrorText ;
+						while ( ( c = *p ) )
 						{
-							event = 0 ;
+							i = lcd_putc( i , j, c ) ;
+							if ( i > 20*FW )
+							{
+								i = 0 ;
+								j += FH ;
+								if ( j > 7*FH )
+								{
+									break ;
+								}
+							}
+							p += 1 ;
 						}
-						// standalone finished so:
-//					basicLoadModelScripts() ;
+  				  refreshDisplay() ;
+//					  wdt_reset() ;		//
 					}
-//					else
-//					{
-//	  				if ( !refreshNeeded )
-//						{
-//    					refreshNeeded = basicTask( PopupData.PopupActive ? 0 : evt, SCRIPT_TELEMETRY ) ;
-//							if ( refreshNeeded )
-//							{
-//								telemetryScriptRunning = 1 ;
-//							}
-//	  				}
-//					} 	
-				}
-				if ( refreshNeeded )
-				{
-					ScriptActive = 1 ;
-					if ( PopupData.PopupActive )
+		#endif
+			
+					uint8_t key = peekEvent() ;
+					if ( key == EVT_KEY_BREAK(KEY_EXIT) )
 					{
-						actionMainPopup( event ) ;
-					}
-//					else
-//					{
-//						if ( telemetryScriptRunning )
-//						{
-//							if ( ( evt==EVT_KEY_LONG(KEY_MENU)) || ( evt==EVT_KEY_LONG(BTN_RE) ) )
-//							{
-//								PopupData.PopupActive = 3 ;
-//								PopupData.PopupIdx = 0 ;
-//    		  			killEvents(evt) ;
-//								evt = 0 ;
-//								Tevent = 0 ;
-//							}
-//						}
-//					}
-				}
-		  	else
-#endif
-				{
-//					if ( ! PoweringOff )
-//					{
-
-					if ( BTjoystickActive )
-					{
-  					if (bleGamepad.isConnected() )
+						AlertMessage = 0 ;
+		#ifdef BASIC
+						if ( BasicErrorText[0] )
 						{
-							handleJoystick() ;						
+							BasicErrorText[0] ='\0' ;
 						}
+		#endif
+						key = getEvent() ;
+						killEvents( key ) ;
 					}
-						
-						ScriptActive = 0 ;
-						g_menuStack[g_menuStackPtr](event) ;
-#if defined(LUA) || defined(BASIC)
-						refreshNeeded = 4 ;
-#endif
-//					}
-//					else
-//					{
-//						refreshNeeded = 2 ;
-//					}
 				}
-#if defined(LUA) || defined(BASIC)
-				if ( ( refreshNeeded == 2 ) || ( ( refreshNeeded == 4 ) ) )
-#endif
+				else
 				{
-					m = micros() ;
-					refreshDisplay() ;
-					m = micros() - m ;
-					Rtime = m ;
-					Cleared = 0 ;
+
+					if ( JustLoadedModel == 2 )
+					{
+						pushMenu( checkThrottle ) ;
+						JustLoadedModel = 1 ;
+					}
+					event = getEvent() ;
+					if ( EnterMenu )
+					{
+						event = EnterMenu ;
+						EnterMenu = 0 ;
+					}
+	#if defined(LUA) || defined(BASIC)
+					uint32_t refreshNeeded = 0 ;
+					{
+	extern uint32_t TotalExecTime ;
+						uint16_t execTime = getTmr2MHz() ;
+						refreshNeeded = basicTask( event, SCRIPT_LCD_OK	| SCRIPT_STANDALONE ) ;
+						execTime = (uint16_t)(getTmr2MHz() - execTime) ;
+						TotalExecTime += execTime ;
+						if ( refreshNeeded == 3 )
+						{
+							refreshNeeded = 0 ;
+	//						if ( sd_card_ready() )
+							{
+								event = 0 ;
+							}
+							// standalone finished so:
+	//					basicLoadModelScripts() ;
+						}
+	//					else
+	//					{
+	//	  				if ( !refreshNeeded )
+	//						{
+	//    					refreshNeeded = basicTask( PopupData.PopupActive ? 0 : evt, SCRIPT_TELEMETRY ) ;
+	//							if ( refreshNeeded )
+	//							{
+	//								telemetryScriptRunning = 1 ;
+	//							}
+	//	  				}
+	//					} 	
+					}
+					if ( refreshNeeded )
+					{
+						ScriptActive = 1 ;
+						if ( PopupData.PopupActive )
+						{
+							actionMainPopup( event ) ;
+						}
+	//					else
+	//					{
+	//						if ( telemetryScriptRunning )
+	//						{
+	//							if ( ( evt==EVT_KEY_LONG(KEY_MENU)) || ( evt==EVT_KEY_LONG(BTN_RE) ) )
+	//							{
+	//								PopupData.PopupActive = 3 ;
+	//								PopupData.PopupIdx = 0 ;
+	//    		  			killEvents(evt) ;
+	//								evt = 0 ;
+	//								Tevent = 0 ;
+	//							}
+	//						}
+	//					}
+					}
+		  		else
+	#endif
+					{
+	//					if ( ! PoweringOff )
+	//					{
+
+							ScriptActive = 0 ;
+							g_menuStack[g_menuStackPtr](event) ;
+	#if defined(LUA) || defined(BASIC)
+							refreshNeeded = 4 ;
+	#endif
+	//					}
+	//					else
+	//					{
+	//						refreshNeeded = 2 ;
+	//					}
+					}
+	#if defined(LUA) || defined(BASIC)
+					if ( ( refreshNeeded == 2 ) || ( ( refreshNeeded == 4 ) ) )
+	#endif
+					{
+						m = micros() ;
+						refreshDisplay() ;
+						m = micros() - m ;
+						Rtime = m ;
+						Cleared = 0 ;
+					}
 				}
+
+				if ( BTjoystickActive )
+				{
+ 					if (bleGamepad.isConnected() )
+					{
+						handleJoystick() ;						
+					}
+				}
+
 	  	}
 		}
 //		else

@@ -46,10 +46,24 @@
 #include "lfs.h"
 #include "freertos/semphr.h"
 
+#define RADIO_PATH           "/RADIO"   // no trailing slash = important
+
 uint8_t Current_general_block ;		// 0 or 1 is active block
 uint8_t Other_general_block_blank ;
 
 uint8_t Spi_complete ;
+
+X20ModelData TempModelData ;
+
+struct lfs_config Cfg ;
+
+lfs_t Lfs ;
+
+uint8_t Lfs_read_buf[256] ;
+uint8_t Lfs_prog_buf[256] ;
+uint32_t Lfs_lookahead_buf[64] ;	// 128/8=16
+//uint8_t Lfs_file_buf[256] ;
+
 
 struct t_eeprom_header
 {
@@ -926,6 +940,9 @@ void ee32LoadModel(uint8_t id)
 //	AltitudeZeroed = 0 ;
 }
 
+
+
+
 void eeReadAll()
 {
 	if(!ee32LoadGeneral() )
@@ -1143,6 +1160,18 @@ bool eeDuplicateModel(uint8_t id)
 	return true ;
 }
 
+//void setModelAFilename( uint8_t *fname, uint8_t id )
+//{
+//	uint8_t *p ;
+////	p = cpystr( fname, (uint8_t *)"RADIO/model" ) ;
+//	p = cpystr( fname, (uint8_t *) RADIO_PATH "/model" ) ;
+//	*p++ = '0'+(id+1)/10 ;
+//	*p++ = '0'+(id+1)%10 ;
+//	*p++ = 'A' ;
+//	cpystr( p, (uint8_t *)".bin" ) ;
+//}
+
+
 void setModelFilename( uint8_t *filename, uint8_t modelIndex, uint32_t type )
 {
 	uint8_t *bptr ;
@@ -1170,9 +1199,70 @@ void setModelFilename( uint8_t *filename, uint8_t modelIndex, uint32_t type )
 	cpystr( bptr, type ? (uint8_t *)".txt" : (uint8_t *)".eepm" ) ;		// ".eepm"
 }
 
+//static const uint8_t base64digits[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/" ;
+
+
+
+
+
+
+////	res = writeXMLfile( &LfsArchiveHandle, (uint8_t *)&TempModelData, sizeof(g_model), &written, ModelNames[modelIndex] ) ;
+//uint32_t writeXMLfile( lfs_file_t *archiveFile, uint8_t *data, uint32_t size )
+//{
+	
+//}
+
+
+//lfs_file_t LfsArchiveHandle ;
+
+//const char *ee32BackupModel( uint8_t modelIndex )
+//{
+//  uint16_t size ;
+////	int result ;
+////  DIR archiveFolder ;
+////  FIL archiveFile ;
+////  UINT written ;
+//	uint8_t filename[50] ;
+//	uint32_t res ;
+//	lfs_dir_t my_dir ;
+
+//  size = File_system[modelIndex].size ;
+	
+//	waitForEepromFinished() ;
+//	memset(( uint8_t *)&TempModelData, 0, sizeof(g_model));
+//  read32_eeprom_data( (File_system[modelIndex].block_no << 12) + sizeof( struct t_eeprom_header), ( uint8_t *)&Eeprom_buffer.data.sky_model_data, size, 0 ) ;
+	
+//	setModelFilename( filename, modelIndex, FILE_TYPE_MODEL ) ;
+	
+//	res = lfs_dir_open( &Lfs, &my_dir, "/MODELS" ) ;
+//  if (res != 0)
+//	{
+////		WatchdogTimeout = 300 ;		// 3 seconds
+//		res = lfs_mkdir( &Lfs, "/MODELS" ) ;
+//   	if (res != 0)
+//		{
+//     	return "FILE ERROR" ;
+//		}
+//  }
+
+//  res = lfs_file_open( &Lfs, &LfsArchiveHandle, (char *)filename, LFS_O_RDWR | LFS_O_CREAT | LFS_O_TRUNC ) ;
+//  if (res != 0)
+//	{
+//   	return "CREATE ERROR" ;
+//  }
+
+//	res = writeXMLfile( &LfsArchiveHandle, (uint8_t *)&TempModelData, sizeof(g_model) ) ;
+  
+//	res = lfs_file_close(&Lfs, &LfsArchiveHandle ) ;
+//  if (res != 0 ) //	|| written != size)
+//	{
+//    return "WRITE ERROR" ;
+//  }
+
+//  return "MODEL SAVED" ;
+//}
 
 // Drivers for LittleFs
-
 
 // NEED to handle conflicts with above
 int block_device_read(const struct lfs_config *c, lfs_block_t block,
@@ -1225,15 +1315,6 @@ int block_device_sync(const struct lfs_config *c)
 {
 	return 0;
 }
-
-struct lfs_config Cfg ;
-
-lfs_t Lfs ;
-
-uint8_t Lfs_read_buf[256] ;
-uint8_t Lfs_prog_buf[256] ;
-uint8_t Lfs_lookahead_buf[256] ;	// 128/8=16
-//uint8_t Lfs_file_buf[256] ;
 
 void LFS_Config(void)
 {

@@ -1008,6 +1008,68 @@ uint8_t hyphinvMenuItem( uint8_t value, uint16_t y, uint8_t condition )
 	return checkIndexed( y, PSTR( STR_HYPH_INV), value, condition ) ;
 }
 
+int16_t gvarDiffValue( uint16_t x, uint16_t y, int16_t value, uint16_t attr, uint8_t event )
+{
+  uint8_t invers = attr&(INVERS|BLINK) ;
+	int16_t temp ;
+
+	if (value >= 500)
+	{
+		// A gvar
+		value -= 510 ;
+		temp = value ;
+		if ( temp < 0 )
+		{
+			temp = -temp - 1 ;
+  		lcd_putcAtt(x-4*FW, y,'-',attr) ;
+		}
+		dispGvar( x-3*FW, y, temp+1, attr ) ;
+		if (invers) value = checkIncDec16( value, -7, 6, EE_MODEL) ;
+		value += 510 ;
+	}
+	else
+	{
+ 	  lcd_outdezAtt(x, y, value, attr ) ;
+   	if (invers) CHECK_INCDEC_H_MODELVAR( value, -100, 100) ;
+	}
+	
+	if (invers)
+	{
+		uint32_t toggle = 0 ;
+		if ( event == EVT_TOGGLE_GVAR )
+		{
+			toggle = 1 ;
+		}
+		if ( getEventDbl(EVT_KEY_FIRST(KEY_MENU)) > 1 )
+		{
+   		killEvents(EVT_KEY_FIRST(KEY_MENU)) ;
+			toggle = 1 ;
+		}
+		if ( toggle )
+		{
+			if ( value >= 500 )
+			{
+				value -= 510 ;
+				if ( value < 0 )
+				{
+					value = -g_model.gvars[-value-1].gvar ;
+				}
+				else
+				{
+					value = g_model.gvars[(uint8_t)value].gvar ;
+				}
+			}
+			else
+			{
+				value = 510 ;
+			}
+//    	value = ( value >= 500) ? g_model.gvars[(uint8_t)value-126].gvar : 510) ;
+//	    eeDirty(EE_MODEL) ;
+		}
+	}
+	return value ;
+}
+
 int16_t gvarMenuItem( uint8_t x, uint8_t y, int16_t value, int8_t min, int8_t max, uint16_t attr, uint8_t event )
 {
   uint8_t invers = attr&(INVERS|BLINK);
@@ -1284,7 +1346,7 @@ void menuMixOne(uint8_t event)
 			case 5:
 				{	
 	        lcd_putsAtt(  1*FW, y, PSTR(STR_Curve), ( md2->differential == 0) ? attr : 0 ) ;
-	        lcd_putsAtt(  1*FW, y, PSTR(STR_15DIFF), ( md2->differential == 1) ? attr : 0 ) ;
+	        lcd_putsAtt(  1*FW, y, PSTR(STR_15DIFF), ( md2->differential & 1) ? attr : 0 ) ;
 	        lcd_putsAtt(  1*FW, y, XPSTR("\021Expo"), ( md2->differential == 2) ? attr : 0 ) ;
 					uint8_t oldvalue =  md2->differential ;
     		  if(attr) CHECK_INCDEC_H_MODELVAR(  md2->differential, 0, 2 ) ;
@@ -1316,9 +1378,33 @@ void menuMixOne(uint8_t event)
       break ;
 
       case 6:
-					if ( md2->differential == 1 )
+					if ( md2->differential & 1 )
 					{	
-		        md2->curve = gvarMenuItem( 12*FW, y, md2->curve, -100, 100, attr /*( m_posHorz==1 ? attr : 0 )*/, event ) ;
+						int16_t value = md2->curve ;
+						if ( md2->differential == 1 )	// old setup
+						{
+							if (value >= 126 || value <= -126)
+							{
+								// Gvar
+								value = (uint8_t)value - 125 ; // 1 to 5
+								value += 510 ;
+							}
+						}
+						else
+						{
+							value += 510 ;
+						}	
+						value = gvarDiffValue( 12*FW, y, value, attr, event ) ;
+						if ( value > 500 )
+						{
+							md2->differential = 3 ;
+							value -= 510 ;
+						}
+						else
+						{
+							md2->differential = 1 ;
+						}
+						md2->curve = value ;
 					}
 					else
 					{
@@ -3163,7 +3249,24 @@ extern uint8_t swOn[] ;
 										put_curve( 18*FW+2+x, 3*FH, pmd->curve, 0 ) ;
 									break ;
 									case 1 :
-				      	    gvarMenuItem( FW*21+1+x, 3*FH, pmd->curve, -100, 100, 0, 0 ) ;
+									{	
+										int16_t ivalue = pmd->curve ;
+										if ( pmd->differential == 1 )	// old setup
+										{
+											if (ivalue >= 126 || ivalue <= -126)
+											{
+												// Gvar
+												ivalue = (uint8_t)ivalue - 126 ; // 0 to 4
+												ivalue += 510 ;
+											}
+										}
+										else
+										{
+											ivalue += 510 ;
+										}
+										gvarDiffValue( FW*21+1+x, 3*FH, ivalue, 0, 0 ) ;
+//				      	    gvarMenuItem( FW*21+1+x, 3*FH, pmd->curve, -100, 100, 0, 0 ) ;
+									}
 									break ;
 									case 2 :
             				lcd_outdezAtt( FW*21+1+x, 3*FH, pmd->curve + 128, 0 ) ;
@@ -4797,7 +4900,24 @@ void editOneProtocol( uint8_t event )
 			{
 				attr = 0 ;
 				lcd_puts_Pleft( y, PSTR(STR_TYPE) ) ;
+extern void set_ext_serial_baudrate( uint32_t baudrate ) ;
+				uint32_t oldSubProtocol = pModule->sub_protocol ;
 				pModule->sub_protocol = checkIndexed( y, XPSTR("\012\003""\006D16(X)D8(D) LRP   R9M   "), pModule->sub_protocol, (sub==subN) ) ;
+				if ( pModule->sub_protocol != oldSubProtocol )
+				{
+					if ( oldSubProtocol == 3 )
+					{
+						set_ext_serial_baudrate( 450000 ) ;
+					}
+					else
+					{
+						if ( pModule->sub_protocol == 3 )
+						{
+							set_ext_serial_baudrate( 420000 ) ;
+						}
+					}
+				}
+				
 				if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
 			}
 			subN += 1 ;
@@ -4815,7 +4935,7 @@ void editOneProtocol( uint8_t event )
 				{
 					uint32_t temp ;
 				  lcd_puts_Pleft( y, XPSTR("Flex mode") );
-					temp = checkIndexed( y, XPSTR("\074\002\006""   OFF915MHz868MHz"), pModule->r9MflexMode, (sub==subN) ) ;
+					temp = checkIndexed( y, XPSTR("\060\002\006""   OFF915MHz868MHz"), pModule->r9MflexMode, (sub==subN) ) ;
 					if ( temp )
 					{
 						if ( temp != pModule->r9MflexMode )
@@ -4824,6 +4944,7 @@ void editOneProtocol( uint8_t event )
 							AlertMessage = "\001Requires R9M non-\037\001certified firmware\037\001Check Frequency for\037\006your region" ;
 						}
 					}
+					pModule->r9MflexMode = temp ;
 				}
 				if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
 				subN += 1 ;
@@ -5019,35 +5140,39 @@ void menuTelemetry(uint8_t event)
 	 
 	if(t_pgOfs<=subN)
 	{
+		if (sub==subN)
+		{
+			Columns = 1 ;
+		}
 		lcd_puts_Pleft( y, XPSTR( "RSSI Warn") ) ;
 	
 		attr = ( ( (sub==subN) && (subSub==0) ) ? InverseBlink : 0) ;
 		offset = 45 ; // rssiOffsetValue( 0 ) ;
 		lcd_outdezAtt( 15*FW, y, g_model.rssiOrange + offset, attr ) ;
   	if( attr) CHECK_INCDEC_H_MODELVAR( g_model.rssiOrange, -18, 30 ) ;
-//	attr = ( ( (sub==subN) && (subSub==1) ) ? InverseBlink : 0) ;
-//	b = 1-g_model.enRssiOrange ;
-//	menu_lcd_onoff( PARAM_OFS+1, y, b, attr ) ;
-//  if( attr) { CHECK_INCDEC_H_MODELVAR_0( b, 1 ) ; g_model.enRssiOrange = 1-b ; }
+		attr = ( ( (sub==subN) && (subSub==1) ) ? InverseBlink : 0) ;
+		b = 1-g_model.enRssiOrange ;
+		menu_lcd_onoff( PARAM_OFS+1, y, b, attr ) ;
+  	if( attr) { CHECK_INCDEC_H_MODELVAR( b, 0, 1 ) ; g_model.enRssiOrange = 1-b ; }
 		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
 	}
 	subN += 1 ;
 
-//	if (sub==subN)
-//	{
-//		Columns = 1 ;
-//	}
 	if(t_pgOfs<=subN)
 	{
+		if (sub==subN)
+		{
+			Columns = 1 ;
+		}
 		lcd_puts_Pleft( y, XPSTR( "RSSI Critical") ) ;
 		attr = ( ( (sub==subN) && (subSub==0) ) ? InverseBlink : 0) ;
 		offset = 42 ; // rssiOffsetValue( 1 ) ;
 		lcd_outdezAtt( 15*FW, y, g_model.rssiRed + offset, attr ) ;
 		if( attr) CHECK_INCDEC_H_MODELVAR( g_model.rssiRed, -17, 30 ) ;
-//	attr = ( ( (sub==subN) && (subSub==1) ) ? InverseBlink : 0) ;
-//	b = 1-g_model.enRssiRed ;
-//	menu_lcd_onoff( PARAM_OFS+1, y, b, attr ) ;
-//  if( attr) { CHECK_INCDEC_H_MODELVAR_0( b, 1 ) ; g_model.enRssiRed = 1-b ; }
+		attr = ( ( (sub==subN) && (subSub==1) ) ? InverseBlink : 0) ;
+		b = 1-g_model.enRssiRed ;
+		menu_lcd_onoff( PARAM_OFS+1, y, b, attr ) ;
+  	if( attr) { CHECK_INCDEC_H_MODELVAR( b, 0, 1 ) ; g_model.enRssiRed = 1-b ; }
 		if((y+=FH)>(SCREEN_LINES-1)*FH) return ;
 	}
 	subN += 1 ;

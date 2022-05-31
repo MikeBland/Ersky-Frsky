@@ -841,7 +841,7 @@ void menuScript(uint8_t event)
 
 
 
-
+uint16_t TelCounts[2] ;
 
 
 void menuDebug(uint8_t event)
@@ -851,6 +851,11 @@ void menuDebug(uint8_t event)
 	TITLE(PSTR("DEBUG")) ;
 	static MState2 mstate2 ;
 	event = mstate2.check( event, e_debug, menuTabStat, DIM(menuTabStat), 0, 0, 0 ) ;
+
+	lcd_outhex4(0, 7*FH, TelCounts[0] ) ;
+	lcd_outhex4(6*FW, 7*FH, TelCounts[1] ) ;
+	  
+
 
 }
 
@@ -1130,13 +1135,13 @@ void menuDeleteDupModel(uint8_t event)
     case YN_YES :
       if ( DupIfNonzero )
       {
-//        message(PSTR(STR_DUPLICATING));
-//        if(eeDuplicateModel(DupSub))
-//        {
-//          audioDefevent(AU_MENUS);
-//          DupIfNonzero = 2 ;		// sel_editMode = false;
-//        }
-//        else audioDefevent(AU_WARNING1);
+        message(PSTR(STR_DUPLICATING));
+        if(eeDuplicateModel(DupSub))
+        {
+          audioDefevent(AU_MENUS);
+          DupIfNonzero = 2 ;		// sel_editMode = false;
+        }
+        else audioDefevent(AU_WARNING1);
       }
       else
       {
@@ -1449,11 +1454,11 @@ void menuModelSelect(uint8_t event)
 		uint16_t mask ;
 		if ( g_eeGeneral.currModel == mstate2.m_posVert )
 		{
-			mask = 0x259 ;
+			mask = 0x219 ;
 		}
 		else
 		{
-			mask = ( eeModelExists( mstate2.m_posVert ) == 0 ) ?  0x96 :  0x017E ;
+			mask = ( eeModelExists( mstate2.m_posVert ) == 0 ) ?  0x16 :  0x003E ;
 		}
 
 		uint8_t popaction = doPopup( PSTR(STR_MODEL_POPUP), mask, 10, event ) ;
@@ -1533,14 +1538,14 @@ void menuModelSelect(uint8_t event)
 				DupSub = sub + 1 ;
        	pushMenu(menuDeleteDupModel);
 			}
-//			else if( popidx == 3 )	// copy
-//			{
-//				{
-// 	        DupIfNonzero = 1 ;
-// 	        DupSub = sub + 1 ;
-// 	        pushMenu(menuDeleteDupModel);//menuProcExpoAll);
-//				}
-//			}
+			else if( popidx == 3 )	// copy
+			{
+				{
+ 	        DupIfNonzero = 1 ;
+ 	        DupSub = sub + 1 ;
+ 	        pushMenu(menuDeleteDupModel);//menuProcExpoAll);
+				}
+			}
 //			else if( popidx == 6 )	// backup
 //			{
 //				WatchdogTimeout = 300 ;		// 3 seconds

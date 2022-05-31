@@ -229,6 +229,7 @@ uint8_t IS_EXPO_THROTTLE( uint8_t x ) ;
 #define PROTO_OFF		     15
 
 #define PXX_BIND			     0x01
+#define PXX_SEND_FAILSAFE  0x10
 #define PXX_RANGE_CHECK		 0x20
 
 extern uint8_t InactivityMonitor ;
@@ -440,6 +441,9 @@ extern void readAnalog() ;
 uint8_t throttleReversed( void ) ;
 
 void eeDirty(uint8_t msk) ;
+
+void alert(const char * s, bool defaults) ;
+void message(const char * s) ;
 
 
 #endif

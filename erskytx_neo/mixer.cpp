@@ -163,6 +163,11 @@ int8_t REG100_100(int8_t x)
 	return REG( x, -100, 100 ) ;
 }
 
+uint8_t REGisGvar( int8_t x )
+{
+  return (x >= 126 || x <= -126) ;	
+}
+
 uint32_t InacCounter = 0 ;
 uint16_t InacSum = 0;
 
@@ -1292,6 +1297,19 @@ void perOut(int16_t *chanOut, uint8_t att )
 				else
 				{
 					int8_t curveParam = REG100_100( md->curve ) ;
+					if ( md->differential == 3 )
+					{
+						// New Gvar
+						if ( curveParam < 0 )
+						{
+							curveParam = -curveParam - 1 ;							
+							curveParam = -g_model.gvars[curveParam].gvar ;
+						}
+						else
+						{
+							curveParam = g_model.gvars[curveParam].gvar ;
+						}
+					}
      			if (curveParam > 0 && v < 0)
 					{
      			  v = (v * (100 - curveParam)) / 100 ;

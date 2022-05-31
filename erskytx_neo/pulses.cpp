@@ -52,6 +52,8 @@ void init_pxx( uint32_t module ) ;
 void init_xfire( uint32_t module ) ;
 void init_no_pulses( uint32_t module ) ;
 void setupPulsesXjtLite( uint32_t module ) ;
+void setSportBaudrate( uint32_t baudrate ) ;
+void enableSportRx() ;
 
 
 void disable_pxx( uint32_t module )
@@ -68,11 +70,16 @@ void init_pxx( uint32_t module )
 {
  	pinMode( 4, INPUT ) ;
 	attachInterrupt( 4, heartbeatHandler, CHANGE ) ;
+	initSportUart() ;
+	setSportBaudrate( 57600 ) ;
+	enableSportRx() ;
 }
 
 void init_xfire( uint32_t module )
 {
-	initSportUart() ;	
+	initSportUart() ;
+	setSportBaudrate( 400000 ) ;
+		
 }
 
 void init_no_pulses( uint32_t module )

@@ -274,9 +274,15 @@ void IRAM_ATTR setupChannelsAccess( uint32_t module, uint32_t type )
 }
 
 
+void setupPulsesR9ACCST( uint32_t module ) ;
 
 void IRAM_ATTR setupPulsesXjtLite( uint32_t module )
 {
+	if ( g_model.Module[module].sub_protocol == 3 )	// R9M
+	{
+		setupPulsesR9ACCST( module ) ;
+		return ;
+	}
 	PtrSerialPxx[module] = PxxSerial[module] ;
 	AccessCrc[module] = 0xFFFF ;
 	*PtrSerialPxx[module]++ = 0x7E ;
@@ -1237,6 +1243,224 @@ uint32_t sportPacketSend( uint8_t *pdata, uint16_t index )
 }
 
 
+uint16_t PcmCrc_x ;
+//extern uint16_t CRCTable(uint8_t val) ;
+//extern uint16_t scaleForPXX( uint8_t i ) ;
+//extern void crc_x( uint8_t data ) ;
+//extern void putPcmByte_x( uint8_t byte ) ;
+
+const uint16_t CRC_Short[]=
+{
+   0x0000, 0x1189, 0x2312, 0x329B, 0x4624, 0x57AD, 0x6536, 0x74BF,
+   0x8C48, 0x9DC1, 0xAF5A, 0xBED3, 0xCA6C, 0xDBE5, 0xE97E, 0xF8F7 };
+
+uint16_t CRCTable(uint8_t val)
+{
+	return CRC_Short[val&0x0F] ^ (0x1081 * (val>>4));
+}
+
+
+static uint8_t Pass[2] ;
+
+void crc_x( uint8_t data )
+{
+    //	uint8_t i ;
+
+  PcmCrc_x =(PcmCrc_x<<8) ^ CRCTable((PcmCrc_x>>8)^data) ;
+}
+
+void putPcmByte_x( uint8_t byte )
+{
+	crc_x( byte ) ;
+  if ( byte == 0x7E )
+	{
+		*PtrSerialPxx[1]++ = 0x7D ;
+		byte = 0x5E ;
+  }
+  else if ( byte == 0x7D )
+	{
+		*PtrSerialPxx[1]++ = 0x7D ;
+		byte = 0x5D ;
+	}
+	*PtrSerialPxx[1]++ = byte ;
+}
+
+uint16_t scaleForPXX( uint8_t i )
+{
+	int16_t value ;
+
+	value = ( i < 32 ) ? g_chans512[i] *3 / 4 + 1024 : 0 ;
+	return limit( (int16_t)1, value, (int16_t)2046 ) ;
+}
+
+void set_ext_serial_baudrate( uint32_t baudrate )
+{
+//	UART_CLKDIV_REGs 8x, 4 frac 20 integer
+//	0x3FF40014 0x3FF50014 0x3FF6E014
+//	0x007002B6 0x0000007E 0x007000BE
+//    115200                420000
+//	Serial2.begin( baudrate ) ;
+	uint32_t *p ;
+	uint32_t x ;
+	p = (uint32_t *)0x3FF6E014 ;
+	x = 80000000*16/baudrate ;
+	x = (( x & 0x0F) << 20) | ( x >> 4) ;
+	*p = x ;
+
+#define RXDAccess 8
+#define TXDAccess 7
+	Serial2.end() ;
+	Serial2.begin( baudrate, SERIAL_8N1, RXDAccess, TXDAccess, true ) ;		// Invert serial signals
+
+
+
+}
+
+
+void setupPulsesR9ACCST( uint32_t module )
+{
+  uint8_t i ;
+  uint16_t chan ;
+  uint16_t chan_1 ;
+	uint8_t lpass ;
+	uint8_t flag1 ;
+
+	lpass = Pass[module] ;
+
+	if ( module == 1 )
+	{
+		PcmCrc_x = 0 ;
+		PtrSerialPxx[1] = PxxSerial[1] ;
+		*PtrSerialPxx[1]++ = 0x7E ;
+  	putPcmByte_x( g_model.Module[module].pxxRxNum ) ;
+ 		if (BindRangeFlag[module] & PXX_BIND)
+		{
+// 		  flag1 = (g_model.Module[module].sub_protocol<< 6) | (g_model.Module[module].country << 1) | BindRangeFlag[module] ;
+ 		  flag1 = 0x40 | (g_model.Module[module].country << 1) | BindRangeFlag[module] ;
+ 		}
+ 		else
+		{
+// 		  flag1 = (g_model.Module[module].sub_protocol << 6) | BindRangeFlag[module] ;
+ 		  flag1 = 0x40 | BindRangeFlag[module] ;
+		}	
+
+		if ( ( flag1 & (PXX_BIND | PXX_RANGE_CHECK )) == 0 )
+		{
+  		if (g_model.Module[module].failsafeMode != FAILSAFE_NOT_SET && g_model.Module[module].failsafeMode != FAILSAFE_RX )
+			{
+    		if ( FailsafeCounter[module] )
+				{
+	    		if ( FailsafeCounter[module]-- == 1 )
+					{
+    	  		flag1 |= PXX_SEND_FAILSAFE ;
+					}
+    			if ( ( FailsafeCounter[module] == 1 ) && (g_model.Module[module].sub_protocol == 0 ) )
+					{
+  	    		flag1 |= PXX_SEND_FAILSAFE ;
+					}
+				}
+	    	if ( FailsafeCounter[module] == 0 )
+				{
+//					if ( g_model.Module[module].failsafeRepeat == 0 )
+//					{
+						FailsafeCounter[module] = 1000 ;
+//					}
+				}
+			}
+		}
+		
+		putPcmByte_x( flag1 ) ;     // First byte of flags
+  	putPcmByte_x( 0 ) ;     // Second byte of flags
+
+		uint8_t startChan = g_model.Module[module].startChannel ;
+		if ( lpass & 1 )
+		{
+			startChan += 8 ;			
+		}
+		chan = 0 ;
+  	for ( i = 0 ; i < 8 ; i += 1 )		// First 8 channels only
+  	{																	// Next 8 channels would have 2048 added
+    	if (flag1 & PXX_SEND_FAILSAFE)
+			{
+				if ( g_model.Module[module].failsafeMode == FAILSAFE_HOLD )
+				{
+					chan_1 = 2047 ;
+				}
+				else if ( g_model.Module[module].failsafeMode == FAILSAFE_NO_PULSES )
+				{
+					chan_1 = 0 ;
+				}
+				else
+				{
+					// Send failsafe value
+					int32_t value ;
+					value = ( startChan < 16 ) ? g_model.Module[module].failsafe[startChan] : 0 ;
+					value = ( value *3933 ) >> 9 ;
+					value += 1024 ;					
+					chan_1 = limit( (int16_t)1, (int16_t)value, (int16_t)2046 ) ;
+				}
+			}
+			else
+			{
+				chan_1 = scaleForPXX( startChan ) ;
+			}
+ 			if ( lpass & 1 )
+			{
+				chan_1 += 2048 ;
+			}
+			startChan += 1 ;
+			
+			if ( i & 1 )
+			{
+	  	  putPcmByte_x( chan ) ; // Low byte of channel
+				putPcmByte_x( ( ( chan >> 8 ) & 0x0F ) | ( chan_1 << 4) ) ;  // 4 bits each from 2 channels
+  		  putPcmByte_x( chan_1 >> 4 ) ;  // High byte of channel
+			}
+			else
+			{
+				chan = chan_1 ;
+			}
+  	}
+	  uint8_t extra_flags = 0 ;
+
+		if ( g_model.Module[module].highChannels )
+		{
+			extra_flags = (1 << 2 ) ;
+		}
+		if ( g_model.Module[module].disableTelemetry )
+		{
+			extra_flags |= (1 << 1 ) ;
+		}
+		extra_flags |= g_model.Module[module].r9mPower << 3 ;
+		if ( g_model.Module[module].r9MflexMode == 2 )
+		{
+			extra_flags |= 1 << 6 ;
+		}
+		putPcmByte_x( extra_flags ) ;
+  	chan = PcmCrc_x ;		        // get the crc
+  	putPcmByte_x( chan >> 8 ) ; // Checksum hi
+  	putPcmByte_x( chan ) ; 			// Checksum lo
+
+		*PtrSerialPxx[1]++ = 0x7E ;
+//		pulseStreamCount[EXTERNAL_MODULE] = PtrSerialPxx[EXTERNAL_MODULE] - PxxSerial[EXTERNAL_MODULE] ;
+extern volatile uint8_t *PxxTxPtr_x ;
+extern volatile uint8_t PxxTxCount_x ;
+		PxxTxPtr_x = PxxSerial[EXTERNAL_MODULE] ;
+		PxxTxCount_x = PtrSerialPxx[EXTERNAL_MODULE] - PxxSerial[EXTERNAL_MODULE] ;	//		 pulseStreamCount[EXTERNAL_MODULE] ;
+//		TIM8->CCR2 = 8000 ;	            // Update time
+//		EXTMODULE_USART->CR1 |= USART_CR1_TXEIE ;		// Enable this interrupt
+		lpass += 1 ;
+		if ( g_model.Module[module].channels == 1 )
+		{
+			lpass = 0 ;
+		}
+		Pass[module] = lpass ;
+	}
+extern volatile uint8_t *PxxTxPtr_x ;
+extern volatile uint8_t PxxTxCount_x ;
+	uint32_t sent ;
+	sent = Serial2.write( (uint8_t *)PxxTxPtr_x, (size_t)PxxTxCount_x ) ;
+}
 
 
 

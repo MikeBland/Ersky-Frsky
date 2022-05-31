@@ -149,6 +149,18 @@ const uint8_t Fr_indices[] =
 	TELEMETRYDATALENGTH-1		// 45
 } ;
 
+#define START_STOP      0x7E
+#define BYTESTUFF       0x7d
+#define STUFF_MASK      0x20
+
+#define FRSKY_SPORT_PACKET_SIZE		9
+
+#define FRSKYDataIdle    0
+#define FRSKYDataStart   1
+#define FRSKYDataInFrame 2
+#define FRSKYDataXOR     3
+
+static uint8_t DataState = FRSKYDataIdle ;
 
 struct t_elrsConfig ElrsConfig ;
 
@@ -1437,6 +1449,27 @@ void processCrossfireTelemetryFrame()
   }
 }
 
+static bool checkSportPacket( uint8_t *packet )
+{
+  uint16_t crc = 0 ;
+  for ( uint8_t i=1; i<FRSKY_SPORT_PACKET_SIZE; i++)
+	{
+    crc += packet[i]; //0-1FF
+    crc += crc >> 8; //0-100
+    crc &= 0x00ff;
+  }
+  return (crc == 0x00ff) ;
+}
+
+void processSportPacket(uint8_t *packet)
+{
+  if ( !checkSportPacket(packet) )
+	{
+    return;
+	}
+	processSportData( packet, 0 ) ;
+}
+
 //void p2hex( unsigned char c ) ;
 
 void telemetryRecieveByte( uint8_t data, uint32_t module )
@@ -1446,40 +1479,98 @@ extern uint16_t TelRxCount ;
 	TelRxCount += 1 ;
 
 //	p2hex( data ) ;	
+
+	if ( g_model.Module[module].protocol == PROTO_XFIRE )
+	{
+		// Handle ELRS data here
+  	uint8_t numbytes = NumPktBytes ;
 	
-	// Handle ELRS data here
-  uint8_t numbytes = NumPktBytes ;
-	
-  if ( numbytes == 0 && data != RADIO_ADDRESS)
-	{
-		return ;
-	}
-	
-  if ( numbytes == 1 && (data < 2 || data > TELEMETRY_RX_PACKET_SIZE-2))
-	{
-    NumPktBytes = 0 ;
-    return ;
-  }
-  
-	if ( numbytes < TELEMETRY_RX_PACKET_SIZE)
-	{
-    TelemetryRxBuffer[numbytes++] = data ;
-  }
-  else
-	{
-    numbytes = 0 ;
-  }
-  
-	if ( numbytes > 4)
-	{
-    uint8_t length = TelemetryRxBuffer[1] ;
-    if (length + 2 == numbytes )
+  	if ( numbytes == 0 && data != RADIO_ADDRESS)
 		{
-      processCrossfireTelemetryFrame() ;
-      numbytes = 0;
-    }
-  }
-	NumPktBytes = numbytes ;
+			return ;
+		}
+	
+  	if ( numbytes == 1 && (data < 2 || data > TELEMETRY_RX_PACKET_SIZE-2))
+		{
+  	  NumPktBytes = 0 ;
+  	  return ;
+  	}
+  
+		if ( numbytes < TELEMETRY_RX_PACKET_SIZE)
+		{
+  	  TelemetryRxBuffer[numbytes++] = data ;
+  	}
+  	else
+		{
+  	  numbytes = 0 ;
+  	}
+  
+		if ( numbytes > 4)
+		{
+  	  uint8_t length = TelemetryRxBuffer[1] ;
+  	  if (length + 2 == numbytes )
+			{
+  	    processCrossfireTelemetryFrame() ;
+  	    numbytes = 0;
+  	  }
+  	}
+		NumPktBytes = numbytes ;
+	}
+	else
+	{
+		// Assume SPort
+  	uint8_t numbytes = NumPktBytes ;
+    switch (DataState) 
+    {
+      case FRSKYDataStart:
+        if (data == START_STOP)
+				{
+       		DataState = FRSKYDataInFrame ;
+         	numbytes = 0 ;
+					break ; // Remain in userDataStart if possible 0x7E,0x7E doublet found.
+				}
+        TelemetryRxBuffer[numbytes++] = data ;
+      break ;
+
+      case FRSKYDataInFrame:
+        if (data == BYTESTUFF)
+        { 
+            DataState = FRSKYDataXOR; // XOR next byte
+            break; 
+        }
+        if (data == START_STOP) // end of frame detected
+        {
+       		DataState = FRSKYDataInFrame ;
+         	numbytes = 0;
+          break;
+        }
+        if (numbytes < 19)
+	        TelemetryRxBuffer[numbytes++] = data;
+      break;
+
+      case FRSKYDataXOR:
+        DataState = FRSKYDataInFrame;
+        if (numbytes < 19)
+          TelemetryRxBuffer[numbytes++] = data ^ STUFF_MASK;
+      break;
+
+      case FRSKYDataIdle:
+        if (data == START_STOP)
+        {
+          numbytes = 0;
+          DataState = FRSKYDataStart;
+        }
+      break ;
+	    
+    } // switch
+  	if (numbytes >= FRSKY_SPORT_PACKET_SIZE)
+		{
+			processSportPacket(TelemetryRxBuffer) ;
+		  numbytes = 0 ;
+			DataState = FRSKYDataIdle ;
+		}
+		NumPktBytes = numbytes ;
+	}
 }
 
 void resetTelemetry( uint32_t item )
